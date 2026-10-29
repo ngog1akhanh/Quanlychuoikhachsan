@@ -33,6 +33,7 @@ public sealed class BookingsController(IBookingService bookingService) : ApiCont
         => OkResponse(await bookingService.UpdateBookingAsync(GetAccountId(), id, request, cancellationToken));
 
     [HttpPost("{id:long}:confirm-deposit")]
+    [RequirePermission("BILLING_PAYMENT_WRITE")]
     [ProducesResponseType<BookingResponse>(StatusCodes.Status200OK)]
     public async Task<ActionResult<BookingResponse>> ConfirmDeposit(
         long id,
@@ -45,11 +46,13 @@ public sealed class BookingsController(IBookingService bookingService) : ApiCont
 
     /// <summary>Registers guest arrival and creates the initial room invoice snapshot.</summary>
     [HttpPost("{id:long}:check-in")]
+    [RequirePermission("BOOKING_WRITE")]
     public async Task<ActionResult<InvoiceResponse>> CheckIn(long id, CheckInRequest request, CancellationToken ct)
         => OkResponse(await bookingService.CheckInAsync(id, request, ct));
 
     /// <summary>Registers departure and finalizes room, surcharge, compensation, and VAT amounts.</summary>
     [HttpPost("{id:long}:check-out")]
+    [RequirePermission("BOOKING_WRITE")]
     public async Task<ActionResult<InvoiceResponse>> CheckOut(long id, CheckOutRequest request, CancellationToken ct)
         => OkResponse(await bookingService.CheckOutAsync(id, request, ct));
 
@@ -58,6 +61,7 @@ public sealed class BookingsController(IBookingService bookingService) : ApiCont
         => OkResponse(await bookingService.CancelAsync(GetAccountId(), id, request, ct));
 
     [HttpPost("{id:long}:mark-no-show")]
+    [RequirePermission("BOOKING_WRITE")]
     public async Task<ActionResult<BookingResponse>> MarkNoShow(long id, MarkNoShowRequest request, CancellationToken ct)
         => OkResponse(await bookingService.MarkNoShowAsync(id, request, ct));
 

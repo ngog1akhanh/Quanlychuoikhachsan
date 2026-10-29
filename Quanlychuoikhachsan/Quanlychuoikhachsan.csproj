@@ -2,6 +2,8 @@
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <!-- EF Core 9 cannot translate C# 14 implicit array-to-Span Contains expressions. -->
+    <LangVersion>13.0</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UserSecretsId>5d7938a6-22dd-4ade-afc1-02e2623e42bf</UserSecretsId>

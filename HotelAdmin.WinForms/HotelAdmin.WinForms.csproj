@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- App quản lý khách sạn (phần B) - WinForms .NET 10, gọi REST API /v1 của backend Quanlychuoikhachsan. -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
+    <ApplicationVisualStyles>true</ApplicationVisualStyles>
+    <ApplicationDefaultFont>Segoe UI, 9.75pt</ApplicationDefaultFont>
+    <RootNamespace>HotelAdmin</RootNamespace>
+    <AssemblyName>HotelAdmin</AssemblyName>
+    <!-- Cho phép build trên máy không phải Windows (CI); chạy vẫn cần Windows. -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Control tự vẽ không dùng Designer serialization cho property tùy biến. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

@@ -109,6 +109,8 @@ public sealed class AuditSaveChangesInterceptor(IHttpContextAccessor httpContext
     }
 
     private static bool IsSensitive(string propertyName) =>
+        propertyName.Contains("MatKhau", StringComparison.OrdinalIgnoreCase) ||
+        propertyName.Contains("MaHash", StringComparison.OrdinalIgnoreCase) ||
         propertyName.Contains("mat_khau", StringComparison.OrdinalIgnoreCase) ||
         propertyName.Contains("password", StringComparison.OrdinalIgnoreCase) ||
         propertyName.Contains("token", StringComparison.OrdinalIgnoreCase);

@@ -12,6 +12,7 @@ namespace Quanlychuoikhachsan.Api.Controllers;
 public sealed class BillingActionsController(IBookingService bookingService) : ApiControllerBase
 {
     [HttpPost("cancellation-requests/{id:long}:approve")]
+    [RequirePermission("CANCELLATION_APPROVE")]
     public async Task<ActionResult<CancellationRequestResponse>> ApproveCancellation(long id, ApproveCancellationRequest request, CancellationToken ct)
         => OkResponse(await bookingService.ApproveCancellationAsync(id, request, ct));
 

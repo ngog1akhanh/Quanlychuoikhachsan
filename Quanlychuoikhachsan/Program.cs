@@ -1,6 +1,8 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
@@ -23,10 +25,29 @@ var connectionString = builder.Configuration.GetConnectionString("HotelManagemen
     ?? throw new InvalidOperationException("ConnectionStrings:HotelManagement is not configured.");
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Common.CurrentActor>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Inventory.InventoryService>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Bookings.BookingService>();
+// Adapter WinForms dùng chung nghiệp vụ với REST API mới.
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.FrontDesk.IFrontDeskService, Quanlychuoikhachsan.Application.FrontDesk.FrontDeskService>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Rooms.IRoomAdminService, Quanlychuoikhachsan.Application.Rooms.RoomAdminService>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Bookings.BookingMaintenance>();
+builder.Services.AddHostedService<Quanlychuoikhachsan.Application.Bookings.BookingMaintenanceWorker>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Services.ServiceOperations>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Payments.DepositPaymentService>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Common.NotificationWriter>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Accounts.PasswordRecovery>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Accounts.IRecoveryEmailSender, Quanlychuoikhachsan.Application.Accounts.SmtpRecoveryEmailSender>();
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = 429;
+    options.AddPolicy("auth", context => RateLimitPartition.GetFixedWindowLimiter(
+        context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
+});
 builder.Services.AddScoped<AuditSaveChangesInterceptor>();
 builder.Services.AddDbContext<HotelDbContext>((serviceProvider, options) =>
     options.AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>())
-        .UseMySql(connectionString, ServerVersion.AutoDetect(connectionString), mySql =>
+        .UseMySql(connectionString, ServerVersion.Parse(builder.Configuration["Database:ServerVersion"] ?? "8.0.36-mysql"), mySql =>
     {
         // Các service tự mở transaction Serializable; không bật retry strategy mặc định.
     }));
@@ -54,6 +75,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
         options.Events = new JwtBearerEvents
         {
+            OnTokenValidated = SessionValidation.ValidateAsync,
             OnChallenge = async context =>
             {
                 context.HandleResponse();
@@ -198,6 +220,7 @@ if (!app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 app.UseRouting();
+app.UseRateLimiter();
 
 app.UseMiddleware<GlobalExceptionMiddleware>();
 app.UseAuthentication();
@@ -209,3 +232,5 @@ app.MapRazorPages()
    .WithStaticAssets();
 
 app.Run();
+
+public partial class Program { }
