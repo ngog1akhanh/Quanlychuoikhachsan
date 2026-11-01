@@ -1,0 +1,30 @@
+@if (Images.Count > 0)
+{
+    <div class="gallery-main">
+        <img src="@Images[_index]" alt="@Title" />
+    </div>
+    @if (Images.Count > 1)
+    {
+        <div class="gallery-thumbs">
+            @for (var i = 0; i < Images.Count; i++)
+            {
+                var idx = i;
+                <button type="button" class="@(idx == _index ? "on" : "")" @onclick="() => _index = idx">
+                    <img src="@Images[idx]" alt="Ảnh @(idx + 1)" />
+                </button>
+            }
+        </div>
+    }
+}
+
+@code {
+    [Parameter, EditorRequired] public IReadOnlyList<string> Images { get; set; } = Array.Empty<string>();
+    [Parameter] public string Title { get; set; } = "";
+
+    private int _index;
+
+    protected override void OnParametersSet()
+    {
+        if (_index >= Images.Count) _index = 0;
+    }
+}

@@ -1,8 +1,8 @@
 # WinForms quản lý khách sạn
 
-Ứng dụng .NET 10 dành cho Windows, lấy từ nhánh LMT và tích hợp với backend mới trong cùng solution.
+Ứng dụng .NET 9 dành cho Windows, lấy từ nhánh LMT và tích hợp với backend mới trong cùng solution.
 
-- Build: `dotnet build ../Quanlychuoikhachsan.slnx` từ thư mục này.
+- Build: `dotnet build ../HeThongQuanLyKhachSan.sln` từ thư mục này.
 - Cấu hình URL server tại `appsettings.json`, khóa `ApiBaseUrl`.
 - Chạy: `dotnet run --project HotelAdmin.WinForms.csproj`.
 - Đăng nhập bằng tài khoản nhân viên đang hoạt động đã được gán vai trò/quyền trong database.

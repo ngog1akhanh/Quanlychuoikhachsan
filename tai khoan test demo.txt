@@ -1,0 +1,47 @@
+THONG TIN TAI KHOAN DEMO - HE THONG QUAN LY KHACH SAN
+====================================================
+
+Luu y:
+- Cac tai khoan ben duoi duoc khai bao trong script Database/Scripts/seed_demo.sql.
+- Mat khau demo mac dinh: 12345.
+- Script seed_demo.sql phai duoc chay thanh cong sau khi tao schema/database.
+- Neu tai khoan da ton tai tu truoc, INSERT IGNORE co the khong cap nhat lai mat khau.
+
+1. APP QUAN LY (WinForms - nhan vien)
+------------------------------------
+Vai tro: ADMIN
+Tai khoan (email/identifier): admin.com
+So dien thoai dang nhap: 0900000000
+Mat khau: 12345
+
+Vai tro: RECEPTIONIST (Le tan)
+Tai khoan (email/identifier): letan@hotel.com
+So dien thoai dang nhap: 0900000001
+Mat khau: 12345
+
+2. WEBSITE DAT PHONG (khach hang)
+---------------------------------
+Tai khoan: an.nguyen@example.com
+So dien thoai: 0901234567
+Mat khau: 12345
+
+Tai khoan: binh.tran@example.com
+So dien thoai: 0912345678
+Mat khau: 12345
+
+Tai khoan: cuong.le@example.com
+So dien thoai: 0923456789
+Mat khau: 12345
+
+Tai khoan: dung.pham@example.com
+So dien thoai: 0934567890
+Mat khau: 12345
+
+3. NEU DANG NHAP KHONG DUOC
+---------------------------
+- Kiem tra da chay script seed_demo.sql tren database hotel_management chua.
+- Kiem tra tai khoan co ton tai trong bang tai_khoan va trang_thai = 'HOAT_DONG'.
+- Vi script dung INSERT IGNORE, neu email/so dien thoai da ton tai thi du lieu cu duoc giu nguyen;
+  khi do mat khau co the khong phai 12345.
+- Khong sua truc tiep mat_khau_hash bang chuoi 12345; day la mat khau da duoc bam hash.
+- Day la tai khoan demo cho moi truong hoc tap, khong dung cho moi truong that.

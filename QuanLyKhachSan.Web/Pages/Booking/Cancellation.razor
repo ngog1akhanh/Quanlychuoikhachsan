@@ -1,0 +1,133 @@
+@page "/booking/{Id:long}/cancel"
+@inject AuthState Auth
+@inject BookingService BookingSvc
+@inject NavigationManager Nav
+
+<PageTitle>Yêu cầu hủy phòng – @HotelInfo.Name</PageTitle>
+
+<div class="container section" style="max-width:760px">
+    <p class="small"><a href="booking/@Id">← Chi tiết booking</a></p>
+    <h1 class="page-title">Yêu cầu hủy đặt phòng</h1>
+
+    @if (_loading)
+    {
+        <Loading />
+    }
+    else if (_result is not null)
+    {
+        <div class="card result-card">
+            <div class="result-icon ok">✓</div>
+            <h2>Đã gửi yêu cầu hủy</h2>
+            <p>Booking <b>@_item?.BookingCode</b> chuyển sang trạng thái <span class="badge badge-warn">Chờ duyệt hủy</span>.</p>
+            <p>Số tiền cọc dự kiến được hoàn: <b>@Fmt.Money(_result.ExpectedRefund)</b></p>
+            <p class="muted small">Quản lý sẽ duyệt hoặc từ chối yêu cầu. Số tiền hoàn thực tế phụ thuộc chính sách hủy và thời điểm gửi yêu cầu.</p>
+            <a class="btn btn-navy" href="account/bookings">Về lịch sử đặt phòng</a>
+        </div>
+    }
+    else if (_item is null)
+    {
+        <div class="empty">@(_error ?? "Không tìm thấy booking này.")</div>
+    }
+    else if (!BookingStatus.CanCancel(_item.Status))
+    {
+        <div class="alert alert-warn">Booking ở trạng thái <b>@BookingStatus.Label(_item.Status)</b> nên không thể gửi yêu cầu hủy.</div>
+        <a class="btn btn-outline" href="booking/@Id">Quay lại</a>
+    }
+    else
+    {
+        <div class="card card-body mb-2">
+            <div class="card-title">Booking @_item.BookingCode</div>
+            <dl class="kv">
+                <dt>Nhận phòng</dt><dd>@Fmt.Date(_item.CheckIn)</dd>
+                <dt>Trả phòng</dt><dd>@Fmt.Date(_item.CheckOut)</dd>
+                <dt>Tổng tiền phòng</dt><dd>@Fmt.Money(_item.Total)</dd>
+                <dt>Trạng thái</dt><dd><span class="badge @BookingStatus.CssClass(_item.Status)">@BookingStatus.Label(_item.Status)</span></dd>
+            </dl>
+        </div>
+
+        <div class="alert alert-info">
+            <b>Lưu ý:</b> bạn không thể tự hủy trực tiếp. Yêu cầu sẽ được quản lý duyệt; tiền cọc hoàn theo chính sách hủy và thời điểm gửi yêu cầu.
+            Số tiền hoàn dự kiến sẽ hiển thị ngay sau khi gửi.
+        </div>
+
+        <div class="card card-body">
+            <EditForm Model="_form" OnValidSubmit="() => _confirm = true" FormName="cancel">
+                <DataAnnotationsValidator />
+                <div class="form-group">
+                    <label class="form-label">Lý do hủy phòng *</label>
+                    <InputTextArea class="form-control" @bind-Value="_form.Reason" rows="4" placeholder="Vui lòng cho biết lý do..." />
+                    <ValidationMessage For="() => _form.Reason" />
+                </div>
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="alert alert-danger">@_error</div>
+                }
+                <button type="submit" class="btn btn-danger btn-lg">Gửi yêu cầu hủy</button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+<ConfirmDialog Visible="_confirm"
+               Title="Gửi yêu cầu hủy phòng?"
+               Message="Yêu cầu sẽ được gửi tới quản lý để duyệt. Bạn có chắc chắn muốn hủy booking này?"
+               ConfirmText="Gửi yêu cầu"
+               ConfirmClass="btn-danger"
+               Busy="_busy"
+               OnConfirm="SubmitAsync"
+               OnCancel="() => _confirm = false" />
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private sealed class CancelForm
+    {
+        [Required(ErrorMessage = "Vui lòng nhập lý do hủy"), StringLength(500, MinimumLength = 5, ErrorMessage = "Lý do từ 5 đến 500 ký tự")]
+        public string Reason { get; set; } = "";
+    }
+
+    private readonly CancelForm _form = new();
+    private BookingListItem? _item;
+    private CancellationRequestResponse? _result;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _confirm;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await Auth.RequireLoginAsync(Nav)) return;
+        _loading = true;
+        try
+        {
+            _item = await BookingSvc.GetMyBookingAsync(Id);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            _result = await BookingSvc.RequestCancelAsync(Id, _form.Reason.Trim());
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+            _confirm = false;
+        }
+    }
+}

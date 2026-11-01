@@ -1,0 +1,78 @@
+@implements IDisposable
+@inject AuthState Auth
+@inject AuthService AuthSvc
+@inject NavigationManager Nav
+
+<div class="topbar">
+    <div class="container">
+        <span>📍 @HotelInfo.Address</span>
+        <span>☎ <a href="tel:@HotelInfo.PhoneRaw">@HotelInfo.Phone</a> &nbsp;|&nbsp; ✉ <a href="mailto:@HotelInfo.Email">@HotelInfo.Email</a></span>
+    </div>
+</div>
+
+<header class="site-header">
+    <div class="container bar">
+        <a class="logo" href="/"><span class="logo-mark">GS</span>@HotelInfo.Name</a>
+
+        <button class="nav-toggle" type="button" aria-label="Mở menu" @onclick="() => _menuOpen = !_menuOpen">☰</button>
+
+        <nav class="main-nav @(_menuOpen ? "open" : "")" @onclick="CloseMenus">
+            <NavLink href="" Match="NavLinkMatch.All">Trang chủ</NavLink>
+            <NavLink href="rooms">Đặt phòng</NavLink>
+            <a href="/#chinh-sach">Thông tin &amp; chính sách</a>
+            <NavLink href="account/bookings">Booking của tôi</NavLink>
+        </nav>
+
+        <div class="header-actions">
+            @if (Auth.IsAuthenticated)
+            {
+                <div class="user-menu">
+                    <button class="user-menu-btn" type="button" @onclick="() => _userOpen = !_userOpen">
+                        👤 @(string.IsNullOrWhiteSpace(Auth.CustomerName) ? "Tài khoản" : Auth.CustomerName) ▾
+                    </button>
+                    @if (_userOpen)
+                    {
+                        <div class="user-menu-list" @onclick="CloseMenus">
+                            <a href="account/profile">Hồ sơ cá nhân</a>
+                            <a href="account/bookings">Lịch sử đặt phòng</a>
+                            <button type="button" @onclick="LogoutAsync">Đăng xuất</button>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <a class="btn btn-ghost btn-sm" href="login">Đăng nhập</a>
+                <a class="btn btn-primary btn-sm" href="register">Đăng ký</a>
+            }
+        </div>
+    </div>
+</header>
+
+@code {
+    private bool _menuOpen;
+    private bool _userOpen;
+
+    protected override async Task OnInitializedAsync()
+    {
+        Auth.Changed += OnAuthChanged;
+        await Auth.EnsureInitializedAsync();
+    }
+
+    private void OnAuthChanged() => _ = InvokeAsync(StateHasChanged);
+
+    private void CloseMenus()
+    {
+        _menuOpen = false;
+        _userOpen = false;
+    }
+
+    private async Task LogoutAsync()
+    {
+        CloseMenus();
+        await AuthSvc.LogoutAsync();
+        Nav.NavigateTo("/");
+    }
+
+    public void Dispose() => Auth.Changed -= OnAuthChanged;
+}

@@ -3,7 +3,7 @@ from pathlib import Path
 import json
 
 root = Path(__file__).resolve().parents[1]
-build = root / "Quanlychuoikhachsan.Api.Tests/bin/Debug/net10.0"
+build = root / "Quanlychuoikhachsan.Api.Tests/bin/Debug/net9.0"
 spec = json.loads((build / "api-openapi.json").read_text(encoding="utf-8-sig"))
 access = {(a["path"], a["method"].lower()): a for a in json.loads((build / "api-access.json").read_text(encoding="utf-8-sig"))}
 groups = {}

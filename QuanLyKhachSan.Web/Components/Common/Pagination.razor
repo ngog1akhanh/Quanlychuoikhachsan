@@ -1,0 +1,32 @@
+@if (TotalPages > 1)
+{
+    <div class="pagination">
+        <button type="button" disabled="@(Page <= 1)" @onclick="() => Go(Page - 1)">‹</button>
+        @foreach (var p in PageNumbers())
+        {
+            var n = p;
+            <button type="button" class="@(n == Page ? "active" : "")" @onclick="() => Go(n)">@n</button>
+        }
+        <button type="button" disabled="@(Page >= TotalPages)" @onclick="() => Go(Page + 1)">›</button>
+    </div>
+}
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public int TotalPages { get; set; } = 1;
+    [Parameter] public EventCallback<int> PageChanged { get; set; }
+
+    private IEnumerable<int> PageNumbers()
+    {
+        var start = Math.Max(1, Page - 2);
+        var end = Math.Min(TotalPages, start + 4);
+        start = Math.Max(1, end - 4);
+        for (var i = start; i <= end; i++) yield return i;
+    }
+
+    private async Task Go(int page)
+    {
+        if (page < 1 || page > TotalPages || page == Page) return;
+        await PageChanged.InvokeAsync(page);
+    }
+}

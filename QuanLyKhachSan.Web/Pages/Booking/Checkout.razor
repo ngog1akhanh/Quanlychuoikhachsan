@@ -1,0 +1,385 @@
+@page "/checkout"
+@implements IDisposable
+@inject AuthState Auth
+@inject BookingState State
+@inject BookingService BookingSvc
+@inject PaymentService PaymentSvc
+@inject NavigationManager Nav
+
+<PageTitle>Đặt phòng – @HotelInfo.Name</PageTitle>
+
+<div class="container section">
+    <h1 class="page-title">Xác nhận đặt phòng</h1>
+
+    @if (!_ready)
+    {
+        <Loading />
+    }
+    else if (State.SelectedCount == 0 && State.CurrentBooking is null)
+    {
+        <div class="empty">
+            <p>Bạn chưa chọn phòng nào.</p>
+            <a class="btn btn-primary" href="rooms">Tìm phòng</a>
+        </div>
+    }
+    else
+    {
+        <div class="steps">
+            <div class="step @(InPaymentStep ? "done" : "active")"><span class="n">@(InPaymentStep ? "✓" : "1")</span> Thông tin &amp; giữ phòng</div>
+            <div class="step @(InPaymentStep ? "active" : "")"><span class="n">2</span> Thanh toán cọc</div>
+            <div class="step"><span class="n">3</span> Hoàn tất</div>
+        </div>
+
+        <div class="layout-main-side">
+            <div>
+                @if (!InPaymentStep)
+                {
+                    <div class="card card-body">
+                        <div class="card-title">Thông tin người đặt</div>
+                        <GuestInformationForm Model="State.Guest"
+                                              Busy="_busy"
+                                              Error="@_error"
+                                              SubmitText="Giữ phòng & tiếp tục thanh toán"
+                                              OnSubmit="CreateHoldAsync" />
+                        <p class="muted small mt-1 mb-0">
+                            Booking được tạo cho tài khoản đang đăng nhập (<b>@Auth.CustomerName</b>). Phòng sẽ được giữ @HotelInfo.HoldMinutes phút.
+                        </p>
+                    </div>
+                }
+                else
+                {
+                    var booking = State.CurrentBooking!;
+
+                    if (_expired)
+                    {
+                        <div class="alert alert-danger">
+                            Đã hết thời gian giữ phòng. Phòng đã được giải phóng, vui lòng tìm và đặt lại.
+                        </div>
+                        <button type="button" class="btn btn-primary" @onclick="RestartAsync">Tìm phòng lại</button>
+                    }
+                    else
+                    {
+                        <div class="hold-box">
+                            <div>Mã booking <b>@booking.BookingCode</b> · <span class="badge @BookingStatus.CssClass(booking.Status)">@BookingStatus.Label(booking.Status)</span></div>
+                            <div class="muted small">Phòng đang được giữ cho bạn, còn lại:</div>
+                            <div class="timer">@RemainingText</div>
+                        </div>
+
+                        <div class="card card-body">
+                            <div class="card-title">Chọn phương thức thanh toán tiền cọc</div>
+
+                            @if (!PaymentSvc.UseMock)
+                            {
+                                if (_order is null)
+                                {
+                                    <p>Tiền cọc được thanh toán bằng <b>chuyển khoản VietQR</b>. Số tiền do hệ thống tính theo chính sách cọc của khách sạn.</p>
+
+                                    if (!string.IsNullOrEmpty(_error))
+                                    {
+                                        <div class="alert alert-danger">@_error</div>
+                                    }
+
+                                    <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_busy" @onclick="CreateQrAsync">
+                                        @if (_busy) { <span class="spinner sm"></span> }
+                                        Tạo mã QR thanh toán cọc
+                                    </button>
+                                }
+                                else
+                                {
+                                    <div class="text-center">
+                                        @if (!string.IsNullOrEmpty(_order.QrDataUrl))
+                                        {
+                                            <img src="@_order.QrDataUrl" alt="Mã QR VietQR" style="max-width:260px;width:100%" />
+                                        }
+                                        else
+                                        {
+                                            <code style="word-break:break-all">@_order.QrCode</code>
+                                        }
+                                        <p class="mt-1 mb-0">Số tiền cọc: <b>@Fmt.Money(_order.Amount)</b></p>
+                                        <p class="mb-0">Nội dung chuyển khoản: <b>@_order.Description</b></p>
+                                        <p class="muted small">Quét mã bằng ứng dụng ngân hàng. Hệ thống tự kiểm tra mỗi 5 giây.</p>
+                                    </div>
+
+                                    if (!string.IsNullOrEmpty(_error))
+                                    {
+                                        <div class="alert alert-warn">@_error</div>
+                                    }
+
+                                    <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_checking" @onclick="() => CheckPaidAsync(false)">
+                                        @if (_checking) { <span class="spinner sm"></span> }
+                                        Tôi đã chuyển khoản – kiểm tra ngay
+                                    </button>
+                                }
+                            }
+                            else
+                            {
+                                <div>
+                            @if (_methods is null)
+                            {
+                                <Loading Message="Đang tải phương thức thanh toán..." />
+                            }
+                            else if (_methods.Count == 0)
+                            {
+                                <div class="alert alert-warn">Chưa có phương thức thanh toán nào đang hoạt động trong hệ thống.</div>
+                            }
+                            else
+                            {
+                                <div class="pay-methods">
+                                    @foreach (var m in _methods)
+                                    {
+                                        var method = m;
+                                        <label class="pay-method @(_method?.Id == method.Id ? "on" : "")">
+                                            <input type="radio" name="pm" checked="@(_method?.Id == method.Id)" @onchange="() => _method = method" />
+                                            <span><b>@method.Name</b></span>
+                                        </label>
+                                    }
+                                </div>
+                            }
+
+                            <div class="alert alert-warn small">
+                                <b>Chế độ demo:</b> nút bên dưới ghi nhận cọc với cổng "DEMO", chưa thu tiền thật. Khi tích hợp VNPay/MoMo/VietQR, bước này sẽ chuyển sang cổng thanh toán.
+                            </div>
+
+                            @if (!string.IsNullOrEmpty(_error))
+                            {
+                                <div class="alert alert-danger">@_error</div>
+                            }
+
+                            <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@(_busy || _method is null)" @onclick="PayAsync">
+                                @if (_busy) { <span class="spinner sm"></span> }
+                                Thanh toán cọc @Fmt.Money(Deposit(booking))
+                            </button>
+                                </div>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+
+            <aside class="sticky-side">
+                <BookingSummary Rooms="State.SelectedRooms"
+                                Query="State.Query"
+                                Booking="State.CurrentBooking"
+                                ShowRemove="@(!InPaymentStep)"
+                                OnRemove="OnRemoveRoom">
+                    @if (!InPaymentStep)
+                    {
+                        <a class="btn btn-outline btn-block mt-2" href="rooms?@State.Query.ToQueryString()">← Chọn thêm / đổi phòng</a>
+                    }
+                </BookingSummary>
+            </aside>
+        </div>
+    }
+</div>
+
+@code {
+    private bool _ready;
+    private bool _busy;
+    private bool _expired;
+    private string? _error;
+    private List<PaymentMethodItem>? _methods;
+    private PaymentMethodItem? _method;
+    private System.Timers.Timer? _timer;
+    private TimeSpan _remaining;
+    private DepositOrder? _order;
+    private System.Timers.Timer? _poll;
+    private bool _checking;
+
+    private bool InPaymentStep => State.CurrentBooking is not null;
+    private string RemainingText => $"{(int)_remaining.TotalMinutes:00}:{_remaining.Seconds:00}";
+    private static decimal Deposit(BookingResponse b) => Math.Round(b.TotalRoomAmount * HotelInfo.DepositRate, 0);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Auth.RequireLoginAsync(Nav)) return;
+
+        if (string.IsNullOrWhiteSpace(State.Guest.FullName)) State.Guest.FullName = Auth.CustomerName ?? "";
+        if (string.IsNullOrWhiteSpace(State.Guest.Email)) State.Guest.Email = Auth.Email ?? "";
+
+        _ready = true;
+        if (InPaymentStep) await EnterPaymentStepAsync();
+    }
+
+    private async Task CreateHoldAsync()
+    {
+        if (State.SelectedCount == 0) return;
+        _busy = true;
+        _error = null;
+        try
+        {
+            var request = new CreateBookingRequest(
+                State.SelectedRooms.Select(r => r.Id).ToList(),
+                State.Query.CheckIn.ToDateTime(new TimeOnly(14, 0)),
+                State.Query.CheckOut.ToDateTime(new TimeOnly(12, 0)),
+                State.Query.Adults,
+                State.Query.Children,
+                string.IsNullOrWhiteSpace(State.Guest.SpecialRequest) ? null : State.Guest.SpecialRequest.Trim());
+
+            State.CurrentBooking = await BookingSvc.CreateAsync(request);
+            await EnterPaymentStepAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.StatusCode == 409
+                ? "Một hoặc nhiều phòng vừa có người đặt. Vui lòng chọn phòng khác."
+                : ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task EnterPaymentStepAsync()
+    {
+        _error = null;
+        UpdateRemaining();
+        StartTimer();
+        try
+        {
+            _methods = await PaymentSvc.GetMethodsAsync();
+            _method = _methods.FirstOrDefault();
+        }
+        catch (ApiException ex)
+        {
+            _methods = new List<PaymentMethodItem>();
+            _error = ex.Message;
+        }
+    }
+
+    private async Task PayAsync()
+    {
+        var booking = State.CurrentBooking;
+        if (booking is null || _method is null || _expired) return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            var confirmed = await PaymentSvc.ConfirmDepositAsync(booking, _method, Deposit(booking));
+            var amount = Deposit(booking);
+            State.ClearSelection();   // xoá giỏ + CurrentBooking
+            Nav.NavigateTo($"payment/result?status=success&bookingId={confirmed.Id}&code={Uri.EscapeDataString(confirmed.BookingCode)}&amount={amount:0}");
+        }
+        catch (ApiException ex)
+        {
+            Nav.NavigateTo($"payment/result?status=failed&bookingId={booking.Id}&code={Uri.EscapeDataString(booking.BookingCode)}&message={Uri.EscapeDataString(ex.Message)}");
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    // ---------- cọc bằng VietQR (API thật) ----------
+    private async Task CreateQrAsync()
+    {
+        var booking = State.CurrentBooking;
+        if (booking is null || _expired) return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            _order = await PaymentSvc.CreateDepositOrderAsync(booking.Id);
+            StartPolling();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void StartPolling()
+    {
+        _poll?.Dispose();
+        _poll = new System.Timers.Timer(5000);
+        _poll.Elapsed += (_, _) => _ = InvokeAsync(() => CheckPaidAsync(true));
+        _poll.Start();
+    }
+
+    private async Task CheckPaidAsync(bool silent)
+    {
+        var booking = State.CurrentBooking;
+        if (_order is null || booking is null || _checking) return;
+
+        _checking = true;
+        try
+        {
+            var o = await PaymentSvc.InquireDepositAsync(_order.OrderId);
+            _order = o;
+            var code = Uri.EscapeDataString(booking.BookingCode);
+
+            if (o.Status == "PAID")
+            {
+                _poll?.Stop();
+                State.ClearSelection();
+                Nav.NavigateTo($"payment/result?status=success&bookingId={booking.Id}&code={code}&amount={o.Amount:0}");
+            }
+            else if (o.Status is "REFUND_REQUIRED" or "REFUNDED")
+            {
+                _poll?.Stop();
+                Nav.NavigateTo($"payment/result?status=failed&bookingId={booking.Id}&code={code}&message=" +
+                               Uri.EscapeDataString("Đã nhận tiền sau khi hết thời gian giữ phòng. Khách sạn sẽ hoàn tiền cho bạn."));
+            }
+            else if (!silent)
+            {
+                _error = "Chưa nhận được tiền chuyển khoản. Vui lòng thử lại sau ít giây.";
+            }
+        }
+        catch (ApiException ex)
+        {
+            if (!silent) _error = ex.Message;
+        }
+        finally
+        {
+            _checking = false;
+            StateHasChanged();
+        }
+    }
+
+    private void OnRemoveRoom(long id) => State.Remove(id);
+
+    private void RestartAsync()
+    {
+        State.ClearSelection();
+        Nav.NavigateTo("rooms?" + State.Query.ToQueryString());
+    }
+
+    // ---------- đếm ngược giữ phòng ----------
+    private void StartTimer()
+    {
+        _timer?.Dispose();
+        _timer = new System.Timers.Timer(1000);
+        _timer.Elapsed += (_, _) => _ = InvokeAsync(() =>
+        {
+            UpdateRemaining();
+            StateHasChanged();
+        });
+        _timer.Start();
+    }
+
+    private void UpdateRemaining()
+    {
+        var exp = State.CurrentBooking?.HoldExpiresAt;
+        if (exp is null) { _remaining = TimeSpan.Zero; return; }
+
+        _remaining = Fmt.AsUtc(exp.Value) - DateTime.UtcNow;
+        if (_remaining <= TimeSpan.Zero)
+        {
+            _remaining = TimeSpan.Zero;
+            _expired = true;
+            _timer?.Stop();
+        }
+    }
+
+    public void Dispose()
+    {
+        _timer?.Dispose();
+        _poll?.Dispose();
+    }
+}

@@ -57,12 +57,12 @@ WinForms nhận cả hai mã khi dựng menu; backend luôn kiểm tra quyền t
 ## Chạy solution
 
 1. Chuẩn bị database và cấu hình backend theo [README](../README.md).
-2. Build `Quanlychuoikhachsan.slnx` (backend, tests và WinForms).
+2. Build `HeThongQuanLyKhachSan.sln` (backend, tests và WinForms).
 3. Chạy backend. Chỉnh `HotelAdmin.WinForms/appsettings.json` → `ApiBaseUrl` về URL backend đang chạy.
 4. Chạy WinForms trên Windows, đăng nhập lại để nhận JWT hợp lệ với phiên bản mới.
 
 ```powershell
-dotnet build Quanlychuoikhachsan.slnx
+dotnet build HeThongQuanLyKhachSan.sln
 dotnet test Quanlychuoikhachsan.Api.Tests/Quanlychuoikhachsan.Api.Tests.csproj
 dotnet run --project Quanlychuoikhachsan
 ```

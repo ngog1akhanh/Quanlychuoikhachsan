@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="css/app.css?v=20261101-2" />
+    <link rel="stylesheet" href="css/booking.css?v=20261101-2" />
+    <link rel="icon" href="images/favicon.svg" type="image/svg+xml" />
+    <HeadOutlet @rendermode="PageRenderMode" />
+</head>
+
+<body>
+    <Routes @rendermode="PageRenderMode" />
+    <script src="_framework/blazor.web.js"></script>
+    <script src="js/site.js"></script>
+</body>
+
+</html>
+
+@code {
+    // Tắt prerender để có thể dùng ProtectedSessionStorage (lưu đăng nhập) ngay khi component khởi tạo.
+    private static readonly IComponentRenderMode PageRenderMode = new InteractiveServerRenderMode(prerender: false);
+}

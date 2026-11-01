@@ -1,0 +1,167 @@
+@page "/reviews/create/{BookingId:long}"
+@inject AuthState Auth
+@inject BookingService BookingSvc
+@inject ReviewService ReviewSvc
+@inject NavigationManager Nav
+
+<PageTitle>Đánh giá kỳ nghỉ – @HotelInfo.Name</PageTitle>
+
+<div class="container section" style="max-width:720px">
+    <p class="small"><a href="booking/@BookingId">← Chi tiết booking</a></p>
+    <h1 class="page-title">Đánh giá sau lưu trú</h1>
+
+    @if (_loading)
+    {
+        <Loading />
+    }
+    else if (_done)
+    {
+        <div class="card result-card">
+            <div class="result-icon ok">★</div>
+            <h2>Cảm ơn bạn đã đánh giá!</h2>
+            <p class="muted">Phản hồi của bạn giúp chúng tôi nâng cao chất lượng dịch vụ. Phản hồi của khách sạn (nếu có) sẽ hiển thị tại đây.</p>
+            <a class="btn btn-navy" href="account/bookings">Về lịch sử đặt phòng</a>
+        </div>
+    }
+    else if (_item is null)
+    {
+        <div class="empty">@(_error ?? "Không tìm thấy booking này.")</div>
+    }
+    else if (!BookingStatus.CanReview(_item.Status))
+    {
+        <div class="alert alert-warn">Chỉ booking đã hoàn tất (đã trả phòng) mới được đánh giá.</div>
+    }
+    else if (_existing is not null)
+    {
+        <div class="card card-body">
+            <div class="card-title">Đánh giá của bạn cho booking @_item.BookingCode</div>
+            <div class="stars sm">
+                @for (var i = 1; i <= 5; i++)
+                {
+                    <button type="button" class="@(i <= _existing.OverallScore ? "on" : "")" disabled>★</button>
+                }
+            </div>
+            <p>@_existing.Content</p>
+            @if (!string.IsNullOrEmpty(_existing.HotelReply))
+            {
+                <div class="alert alert-info"><b>Phản hồi từ khách sạn:</b> @_existing.HotelReply</div>
+            }
+            <p class="muted small mb-0">Mỗi booking chỉ được đánh giá một lần.</p>
+        </div>
+    }
+    else
+    {
+        <div class="card card-body">
+            <div class="card-title">Booking @_item.BookingCode · @Fmt.Date(_item.CheckIn) → @Fmt.Date(_item.CheckOut)</div>
+
+            <EditForm Model="_form" OnValidSubmit="SubmitAsync" FormName="review">
+                <DataAnnotationsValidator />
+
+                <div class="form-group">
+                    <label class="form-label">Đánh giá tổng thể *</label>
+                    <div class="stars">
+                        @for (var i = 1; i <= 5; i++)
+                        {
+                            var n = i;
+                            <button type="button" class="@(n <= _form.OverallScore ? "on" : "")" @onclick="() => _form.OverallScore = n" title="@n sao">★</button>
+                        }
+                    </div>
+                    <ValidationMessage For="() => _form.OverallScore" />
+                </div>
+
+                <div class="grid-2">
+                    <div class="form-group">
+                        <label class="form-label">Phòng</label>
+                        <div class="stars sm">
+                            @for (var i = 1; i <= 5; i++)
+                            {
+                                var n = i;
+                                <button type="button" class="@(n <= (_form.RoomScore ?? 0) ? "on" : "")" @onclick="() => _form.RoomScore = n">★</button>
+                            }
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Dịch vụ</label>
+                        <div class="stars sm">
+                            @for (var i = 1; i <= 5; i++)
+                            {
+                                var n = i;
+                                <button type="button" class="@(n <= (_form.ServiceScore ?? 0) ? "on" : "")" @onclick="() => _form.ServiceScore = n">★</button>
+                            }
+                        </div>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Nhận xét về phòng và dịch vụ</label>
+                    <InputTextArea class="form-control" @bind-Value="_form.Content" rows="5" placeholder="Chia sẻ trải nghiệm của bạn..." />
+                    <ValidationMessage For="() => _form.Content" />
+                </div>
+
+                @if (!string.IsNullOrEmpty(_error))
+                {
+                    <div class="alert alert-danger">@_error</div>
+                }
+
+                <button type="submit" class="btn btn-primary btn-lg" disabled="@_busy">
+                    @if (_busy) { <span class="spinner sm"></span> }
+                    Gửi đánh giá
+                </button>
+            </EditForm>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long BookingId { get; set; }
+
+    private readonly CreateReviewRequest _form = new();
+    private BookingListItem? _item;
+    private ReviewResponse? _existing;
+    private bool _loading = true;
+    private bool _busy;
+    private bool _done;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await Auth.RequireLoginAsync(Nav)) return;
+
+        _loading = true;
+        _form.BookingId = BookingId;
+        try
+        {
+            _item = await BookingSvc.GetMyBookingAsync(BookingId);
+            if (_item is not null) _existing = await ReviewSvc.GetByBookingAsync(BookingId);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await ReviewSvc.CreateAsync(_form);
+            _done = true;
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.StatusCode == 404
+                ? "Hệ thống chưa nhận được đánh giá. Chỉ booking đã trả phòng và chưa đánh giá mới gửi được."
+                : ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

@@ -1,0 +1,123 @@
+@page "/booking/{Id:long}"
+@inject AuthState Auth
+@inject BookingService BookingSvc
+@inject BookingState State
+@inject NavigationManager Nav
+
+<PageTitle>Chi tiết booking – @HotelInfo.Name</PageTitle>
+
+<div class="container section">
+    <p class="small"><a href="account/bookings">← Lịch sử đặt phòng</a></p>
+
+    @if (_loading)
+    {
+        <Loading />
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    else if (_item is null)
+    {
+        <div class="empty">Không tìm thấy booking này trong tài khoản của bạn.</div>
+    }
+    else
+    {
+        var nights = _detail?.Nights;
+        <div class="flex between center-y flex-wrap gap-2 mb-2">
+            <h1 class="mb-0">Booking @_item.BookingCode</h1>
+            <span class="badge @BookingStatus.CssClass(_item.Status)">@BookingStatus.Label(_item.Status)</span>
+        </div>
+
+        <div class="layout-main-side">
+            <div>
+                <div class="card card-body">
+                    <div class="card-title">Thông tin lưu trú</div>
+                    <dl class="kv">
+                        <dt>Mã booking</dt><dd>@_item.BookingCode</dd>
+                        <dt>Nhận phòng</dt><dd>@Fmt.Date(_item.CheckIn) · từ @HotelInfo.CheckInTime</dd>
+                        <dt>Trả phòng</dt><dd>@Fmt.Date(_item.CheckOut) · trước @HotelInfo.CheckOutTime</dd>
+                        <dt>Số đêm</dt><dd>@Math.Max(1, (_item.CheckOut.Date - _item.CheckIn.Date).Days)</dd>
+                        <dt>Tổng tiền phòng</dt><dd>@Fmt.Money(_item.Total)</dd>
+                        <dt>Tiền cọc (@((HotelInfo.DepositRate * 100).ToString("0"))%)</dt><dd>@Fmt.Money(Math.Round(_item.Total * HotelInfo.DepositRate, 0))</dd>
+                        <dt>Trạng thái</dt><dd>@BookingStatus.Label(_item.Status)</dd>
+                    </dl>
+                </div>
+
+                @if (nights is { Count: > 0 })
+                {
+                    <div class="card card-body mt-2">
+                        <div class="card-title">Giá chốt từng đêm</div>
+                        <table class="table">
+                            <thead><tr><th>Đêm</th><th>Giá</th></tr></thead>
+                            <tbody>
+                                @foreach (var n in nights)
+                                {
+                                    <tr><td>@Fmt.Date(n.StayDate)</td><td>@Fmt.Money(n.FinalPrice)</td></tr>
+                                }
+                            </tbody>
+                            <tfoot><tr><td>Tổng</td><td>@Fmt.Money(nights.Sum(n => n.FinalPrice))</td></tr></tfoot>
+                        </table>
+                    </div>
+                }
+                else
+                {
+                    <p class="muted small mt-1">Chi tiết giá từng đêm sẽ hiển thị khi backend bổ sung API xem chi tiết booking (GET /v1/bookings/{id} dành cho khách).</p>
+                }
+            </div>
+
+            <aside class="sticky-side">
+                <div class="card card-body">
+                    <div class="card-title">Thao tác</div>
+                    <div class="grid" style="display:grid;gap:10px">
+                        @if (BookingStatus.CanCancel(_item.Status))
+                        {
+                            <a class="btn btn-danger" href="booking/@_item.Id/cancel">Gửi yêu cầu hủy</a>
+                        }
+                        @if (BookingStatus.CanReview(_item.Status))
+                        {
+                            <a class="btn btn-primary" href="reviews/create/@_item.Id">Đánh giá kỳ nghỉ</a>
+                        }
+                        <a class="btn btn-outline" href="rooms">Đặt phòng mới</a>
+                    </div>
+                    <hr />
+                    <p class="small muted mb-0">
+                        Bạn chỉ có thể sửa thông tin liên hệ. Muốn đổi ngày hoặc đổi phòng, vui lòng liên hệ
+                        <a href="tel:@HotelInfo.PhoneRaw">@HotelInfo.Phone</a> để nhân viên xử lý.
+                    </p>
+                </div>
+            </aside>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    private BookingListItem? _item;
+    private BookingResponse? _detail;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!await Auth.RequireLoginAsync(Nav)) return;
+
+        _loading = true;
+        _error = null;
+        try
+        {
+            _item = await BookingSvc.GetMyBookingAsync(Id);
+            // Chi tiết từng đêm: mock có sẵn; thật thì lấy từ booking vừa tạo trong phiên (nếu trùng id)
+            _detail = BookingSvc.GetMockDetail(Id) ?? (State.CurrentBooking?.Id == Id ? State.CurrentBooking : null);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

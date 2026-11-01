@@ -1,0 +1,159 @@
+@page "/rooms/{Id:long}"
+@implements IDisposable
+@inject RoomService RoomSvc
+@inject BookingState State
+@inject NavigationManager Nav
+
+<PageTitle>@(_room?.RoomTypeName ?? "Chi tiết phòng") – @HotelInfo.Name</PageTitle>
+
+<div class="container section">
+    <p class="small"><a href="rooms?@State.Query.ToQueryString()">← Quay lại danh sách phòng</a></p>
+
+    @if (_loading)
+    {
+        <Loading />
+    }
+    else if (_room is null)
+    {
+        <div class="empty">
+            <p>@(_error ?? "Phòng này không còn trống trong khoảng thời gian đã chọn hoặc không tồn tại.")</p>
+            <a class="btn btn-primary" href="rooms">Tìm phòng khác</a>
+        </div>
+    }
+    else
+    {
+        var r = _room;
+        var q = State.Query;
+        <div class="layout-main-side">
+            <div>
+                <RoomGallery Images="RoomImages.Gallery(r)" Title="@r.RoomTypeName" />
+
+                <h1 class="mt-2">@r.RoomTypeName <small class="muted" style="font-size:18px">· Phòng @r.RoomNumber</small></h1>
+
+                <div class="spec-grid">
+                    <div class="spec"><small>Diện tích</small><b>@(r.AreaM2 is null ? "—" : r.AreaM2.Value.ToString("0.#") + " m²")</b></div>
+                    <div class="spec"><small>Sức chứa</small><b>@r.MaxAdults người lớn@(r.MaxChildren > 0 ? $" + {r.MaxChildren} trẻ em" : "")</b></div>
+                    <div class="spec"><small>Tầng</small><b>@(r.Floor ?? "—")</b></div>
+                    <div class="spec"><small>View</small><b>@(r.ViewType ?? "—")</b></div>
+                </div>
+
+                <div class="card card-body">
+                    <div class="card-title">Mô tả</div>
+                    <p>@(r.Description ?? "Đang cập nhật.")</p>
+
+                    <div class="card-title mt-2">Tiện nghi</div>
+                    <ul class="amenities">
+                        @foreach (var a in Amenities)
+                        {
+                            <li>@a</li>
+                        }
+                    </ul>
+                    <p class="muted small mt-1 mb-0">Danh sách tiện nghi mang tính tham khảo – backend hiện chưa trả tiện nghi riêng cho từng phòng.</p>
+                </div>
+
+                <div class="card card-body mt-2">
+                    <div class="card-title">Giá dự kiến từng đêm</div>
+                    <table class="table">
+                        <thead><tr><th>Đêm</th><th>Giá</th></tr></thead>
+                        <tbody>
+                            @for (var d = q.CheckIn; d < q.CheckOut; d = d.AddDays(1))
+                            {
+                                <tr><td>@Fmt.Weekday(d)</td><td>@Fmt.Money(r.UnitPrice)</td></tr>
+                            }
+                        </tbody>
+                        <tfoot><tr><td>Tổng @q.Nights đêm</td><td>@Fmt.Money(r.UnitPrice * q.Nights)</td></tr></tfoot>
+                    </table>
+                    <p class="muted small mb-0">Giá chính thức từng đêm (theo bảng giá, cuối tuần, ngày lễ) do hệ thống chốt khi giữ phòng.</p>
+                </div>
+            </div>
+
+            <aside class="sticky-side">
+                <div class="card price-panel">
+                    <div class="muted small">Giá mỗi đêm từ</div>
+                    <div class="big">@Fmt.Money(r.UnitPrice)</div>
+                    <hr />
+                    <div class="summary-row"><span>Nhận phòng</span><b>@Fmt.Date(q.CheckIn)</b></div>
+                    <div class="summary-row"><span>Trả phòng</span><b>@Fmt.Date(q.CheckOut)</b></div>
+                    <div class="summary-row"><span>Khách</span><b>@q.Adults NL@(q.Children > 0 ? $", {q.Children} TE" : "")</b></div>
+                    <div class="summary-row total"><span>Tạm tính</span><span>@Fmt.Money(r.UnitPrice * q.Nights)</span></div>
+                    <div class="summary-row deposit"><span>Tiền cọc (@((HotelInfo.DepositRate * 100).ToString("0"))%)</span><b>@Fmt.Money(Math.Round(r.UnitPrice * q.Nights * HotelInfo.DepositRate, 0))</b></div>
+
+                    <button type="button" class="btn btn-primary btn-lg btn-block mt-2" @onclick="BookNow">Đặt phòng này</button>
+                    <button type="button" class="btn btn-outline btn-block mt-1" @onclick="ToggleSelect">
+                        @(State.IsSelected(r.Id) ? "Bỏ khỏi lựa chọn" : "Thêm vào lựa chọn (đặt nhiều phòng)")
+                    </button>
+                    @if (State.SelectedCount > 0)
+                    {
+                        <p class="small muted mt-1 mb-0">Đang chọn @State.SelectedCount phòng · <a href="checkout">Tới trang đặt phòng</a></p>
+                    }
+                </div>
+            </aside>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public long Id { get; set; }
+
+    [SupplyParameterFromQuery(Name = "checkIn")] public string? CheckInText { get; set; }
+    [SupplyParameterFromQuery(Name = "checkOut")] public string? CheckOutText { get; set; }
+    [SupplyParameterFromQuery(Name = "adults")] public int? AdultsValue { get; set; }
+    [SupplyParameterFromQuery(Name = "children")] public int? ChildrenValue { get; set; }
+
+    private static readonly string[] Amenities =
+    {
+        "Wi-Fi miễn phí", "Điều hòa nhiệt độ", "Smart TV", "Minibar", "Két an toàn",
+        "Máy sấy tóc", "Dép & đồ vệ sinh cá nhân", "Bàn làm việc", "Ấm đun nước, trà & cà phê"
+    };
+
+    private PublicRoom? _room;
+    private bool _loading = true;
+    private string? _error;
+
+    protected override void OnInitialized() => State.Changed += OnStateChanged;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            var q = (CheckInText is not null || CheckOutText is not null)
+                ? RoomSearchQuery.FromUrl(CheckInText, CheckOutText, AdultsValue, ChildrenValue)
+                : State.Query.Clone();
+
+            _room = State.Results.FirstOrDefault(r => r.Id == Id);
+            if (_room is null || !State.Query.SameAs(q))
+            {
+                // Vào thẳng link chi tiết (hoặc F5) → tìm lại theo điều kiện trong URL
+                var rooms = await RoomSvc.SearchAvailableAsync(q);
+                State.SetResults(q, rooms);
+                _room = rooms.FirstOrDefault(r => r.Id == Id);
+            }
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+            _room = null;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void ToggleSelect()
+    {
+        if (_room is not null) State.Toggle(_room);
+    }
+
+    private void BookNow()
+    {
+        if (_room is null) return;
+        if (!State.IsSelected(_room.Id)) State.Toggle(_room);
+        Nav.NavigateTo("checkout");
+    }
+
+    private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => State.Changed -= OnStateChanged;
+}
