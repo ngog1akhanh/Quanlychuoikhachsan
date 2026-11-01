@@ -3,7 +3,7 @@ using HotelAdmin.Models;
 
 namespace HotelAdmin.Services;
 
-/// <summary>Các hàm gọi API của Giai đoạn 1: phòng, đặt phòng tại quầy, nhận/trả phòng.</summary>
+/// <summary>Các hàm gọi API phòng, đặt phòng tại quầy, nhận/trả phòng.</summary>
 public sealed partial class ApiClient
 {
     // ---------------- Phòng (RoomAdminController + RoomsController/RoomTypesController) ----------------

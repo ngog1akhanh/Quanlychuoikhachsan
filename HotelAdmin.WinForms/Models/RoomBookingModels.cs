@@ -1,6 +1,6 @@
 namespace HotelAdmin.Models;
 
-// DTO Giai đoạn 1 – khớp với backend:
+// DTO phòng, đặt phòng, nhận/trả phòng – khớp với backend:
 //   Application/FrontDesk/FrontDeskDtos.cs, Application/FrontDesk/FrontDeskService.cs (CancellationRequestItem)
 //   Application/Rooms/RoomAdminService.cs
 // Thời gian nhận/trả phòng là giờ địa phương của khách sạn (không kèm múi giờ).

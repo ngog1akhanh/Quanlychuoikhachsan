@@ -170,7 +170,7 @@ public sealed class BookingDetailView : Panel
 
         // ---- Lịch sử ----
         flow.Controls.Add(SectionTitle("Lịch sử thay đổi"));
-        if (d.History.Count == 0) flow.Controls.Add(Hint("Chưa có lịch sử (booking tạo trước Giai đoạn 1 hoặc từ website)."));
+        if (d.History.Count == 0) flow.Controls.Add(Hint("Chưa có lịch sử thay đổi trạng thái cho booking này."));
         else
         {
             var history = SmallGrid();

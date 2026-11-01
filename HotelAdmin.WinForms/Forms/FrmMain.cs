@@ -264,9 +264,9 @@ public sealed class FrmMain : Form
         PageBase page = key switch
         {
             Modules.Dashboard => new DashboardPage(api, session),
-            "rooms" => new RoomsPage(api, session),          // Giai đoạn 1A
-            "bookings" => new BookingsPage(api, session),    // Giai đoạn 1B
-            "frontdesk" => new FrontDeskPage(api, session),  // Giai đoạn 1C
+            "rooms" => new RoomsPage(api, session),
+            "bookings" => new BookingsPage(api, session),
+            "frontdesk" => new FrontDeskPage(api, session),
             "billing" => new BillingPage(api, session),
             "housekeeping" => new HousekeepingPage(api, session),
             "services" => new ServicesPage(api, session),
