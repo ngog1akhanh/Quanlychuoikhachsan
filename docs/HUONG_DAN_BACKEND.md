@@ -1,69 +1,182 @@
-# Quản lý khách sạn và website đặt phòng
+# Hướng dẫn backend
 
-Backend ASP.NET Core/.NET 9, Entity Framework Core 9, Pomelo MySQL; giữ cấu trúc `Api`, `Application`, `Domain`, `Infrastructure` và Razor Pages hiện có.
+Backend của hệ thống quản lý khách sạn: REST API phục vụ **App quản lý (WinForms)** và **website đặt phòng (Blazor)**.
 
-## Bản tích hợp LMT
+**Nội dung**
 
-WinForms từ RAR đã được đưa vào solution và kết nối với API mới qua lớp tương thích. Xem [hướng dẫn tích hợp](LMT_INTEGRATION.md) để chạy, cập nhật quyền và kiểm tra dữ liệu thời gian cũ.
+1. [Công nghệ và cấu trúc](#1-công-nghệ-và-cấu-trúc)
+2. [Chuẩn bị database](#2-chuẩn-bị-database)
+3. [Cấu hình](#3-cấu-hình)
+4. [Chạy và kiểm thử](#4-chạy-và-kiểm-thử)
+5. [Quy ước API](#5-quy-ước-api)
+6. [Quy tắc nghiệp vụ quan trọng](#6-quy-tắc-nghiệp-vụ-quan-trọng)
+7. [Vai trò và quyền](#7-vai-trò-và-quyền)
+8. [Thời gian và múi giờ](#8-thời-gian-và-múi-giờ)
+9. [Giới hạn hiện tại](#9-giới-hạn-hiện-tại)
+10. [Tài liệu liên quan](#10-tài-liệu-liên-quan)
 
-## Tài liệu API
+---
 
-- [Đối chiếu chức năng và các nghiệp vụ dùng chung](API_FUNCTIONAL_COVERAGE.md).
-- [Hướng dẫn tích hợp và ví dụ nhập hàng, đặt phòng, thanh toán](API_WORKFLOWS.md).
-- [Danh mục endpoint](API_ENDPOINTS.md).
-- [OpenAPI JSON để import vào Postman](openapi.json).
-- Swagger khi chạy Development: `/swagger`; JSON: `/swagger/v1/swagger.json`.
+## 1. Công nghệ và cấu trúc
 
-## Chuẩn bị database
-
-Với database mới, chạy theo thứ tự trong database `hotel_management`:
-
-1. `Quanlychuoikhachsan/Database/Scripts/hotel_management_final_food_inventory.sql`.
-2. `Quanlychuoikhachsan/Database/Scripts/add_vietqr_payment_order.sql`.
-3. `Quanlychuoikhachsan/Database/Scripts/add_operational_api_support.sql`.
-4. `Quanlychuoikhachsan/Database/Scripts/seed_api_permissions.sql`.
-
-Với database đã có, chỉ áp dụng các script bổ sung chưa chạy; không chạy lại schema gốc. Script quyền thêm quyền và liên kết vai trò còn thiếu, không tạo tài khoản/mật khẩu mặc định. Các đề xuất DDL trong tài liệu feedback chưa được tự động áp dụng; validation kho được bổ sung ở API.
-
-Tài khoản quản trị đầu tiên cần có hồ sơ nhân viên đang làm việc và liên kết vai trò `ADMIN` trong database. Dùng mật khẩu băm bởi ASP.NET Core Identity; không nhập mật khẩu dạng rõ vào `mat_khau_hash`. Admin hiện có có thể tạo nhân viên và gán vai trò qua API.
-
-## Cấu hình và chạy
-
-Cấu hình bằng User Secrets hoặc biến môi trường (`__` thay `:`):
-
-| Khóa | Ý nghĩa |
+| Thành phần | Công nghệ |
 |---|---|
-| `ConnectionStrings:HotelManagement` | Chuỗi kết nối tới database đã áp dụng script |
-| `Database:ServerVersion` | Mặc định `8.0.36-mysql`; nếu dùng MariaDB, đặt đúng phiên bản, ví dụ `10.4.32-mariadb` |
-| `Jwt:SigningKey` | Khóa bí mật ngẫu nhiên tối thiểu 32 ký tự |
-| `Jwt:Issuer`, `Jwt:Audience` | Issuer/audience của ứng dụng |
-| `VietQR:Username`, `VietQR:Password` | Thông tin gateway sandbox hiện có |
-| `VietQR:BankAccount`, `VietQR:BankCode`, `VietQR:UserBankName` | Tài khoản nhận tiền |
-| `Smtp:Host`, `Smtp:Port`, `Smtp:From`, `Smtp:Username`, `Smtp:Password` | Gửi mã đặt lại mật khẩu; TLS, port mặc định 587 |
-| `BookingMaintenance:Enabled` | Mặc định `true`: mỗi phút xử lý HOLD hết hạn, nhắc lịch và thông báo vận hành |
+| Nền tảng | ASP.NET Core .NET 9 (Web API + Razor Pages) |
+| Cơ sở dữ liệu | MySQL 8 hoặc MariaDB, qua Entity Framework Core 9 + Pomelo |
+| Xác thực | JWT Bearer; quyền đọc từ bảng tài khoản – vai trò – quyền |
+| Tài liệu API | Swagger tại `/swagger` (môi trường Development) |
+
+Thư mục trong `Quanlychuoikhachsan/`:
+
+| Thư mục | Chứa gì |
+|---|---|
+| `Api/Controllers` | Định nghĩa đường dẫn HTTP |
+| `Application` | Nghiệp vụ và DTO |
+| `Domain/Entities` | Lớp ánh xạ bảng database |
+| `Infrastructure` | Truy cập dữ liệu, xác thực, middleware, VietQR |
+| `Database/Scripts` | Script tạo database và dữ liệu mẫu |
+
+---
+
+## 2. Chuẩn bị database
+
+Tạo database **mới**: mở MySQL Workbench, chạy lần lượt 5 script trong `Quanlychuoikhachsan/Database/Scripts/`.
+
+| Thứ tự | Script | Tác dụng |
+|---|---|---|
+| 1 | `hotel_management_final_food_inventory.sql` | Tạo database `hotel_management` và toàn bộ bảng |
+| 2 | `add_vietqr_payment_order.sql` | Bảng thanh toán VietQR cho hóa đơn |
+| 3 | `add_operational_api_support.sql` | Bảng đơn cọc VietQR |
+| 4 | `seed_api_permissions.sql` | Vai trò, quyền và phân quyền mặc định |
+| 5 | `seed_demo.sql` | Dữ liệu mẫu: 10 tài khoản, 24 phòng, ~160 booking, dịch vụ, hàng kho |
+
+> Từ script 2 trở đi, trước khi chạy hãy **bấm đúp vào `hotel_management`** ở panel Schemas để chọn database (tên in đậm).
+
+Tài khoản demo nằm trong `tai khoan test demo.txt`, mật khẩu chung `12345`.
+
+**Database đã có sẵn:** chỉ chạy các script bổ sung chưa chạy, không chạy lại script 1. Script 4 và 5 chạy lại nhiều lần được.
+
+---
+
+## 3. Cấu hình
+
+Đặt bằng **User Secrets** hoặc biến môi trường (dùng `__` thay cho `:`). Không đưa thông tin bí mật vào Git.
+
+| Khóa | Bắt buộc | Ý nghĩa |
+|---|:---:|---|
+| `ConnectionStrings:HotelManagement` | ✔ | Chuỗi kết nối MySQL |
+| `Jwt:SigningKey` | ✔ | Khóa ký token, tối thiểu 32 ký tự |
+| `Jwt:Issuer`, `Jwt:Audience` | ✔ | Tên phát hành / đối tượng của token |
+| `Database:ServerVersion` | | Mặc định `8.0.36-mysql`; MariaDB thì ghi đúng phiên bản, vd. `10.4.32-mariadb` |
+| `VietQR:Username`, `VietQR:Password` | | Tài khoản VietQR sandbox (cần cho thanh toán QR) |
+| `VietQR:BankAccount`, `VietQR:BankCode`, `VietQR:UserBankName` | | Tài khoản nhận tiền |
+| `Smtp:Host`, `Smtp:Port`, `Smtp:From`, `Smtp:Username`, `Smtp:Password` | | Gửi mã đặt lại mật khẩu (port mặc định 587) |
+| `BookingMaintenance:Enabled` | | Mặc định `true`: mỗi phút hủy booking giữ chỗ hết hạn và gửi nhắc lịch |
+
+---
+
+## 4. Chạy và kiểm thử
+
+**Cách nhanh:** nhấp đúp `chay-he-thong.bat` ở thư mục gốc. File này mở API (cổng 5005), đợi API sẵn sàng rồi mở Web (cổng 5100) và App quản lý.
+
+**Chạy bằng lệnh:**
 
 ```powershell
-dotnet restore HeThongQuanLyKhachSan.sln
 dotnet build HeThongQuanLyKhachSan.sln
 dotnet test Quanlychuoikhachsan.Api.Tests/Quanlychuoikhachsan.Api.Tests.csproj
-dotnet run --project Quanlychuoikhachsan/Quanlychuoikhachsan.csproj
+dotnet run --project Quanlychuoikhachsan --launch-profile http
 ```
 
-Cấu hình bí mật không được đưa vào Git. ServerVersion được cấu hình tường minh để khởi động Swagger không cần tự dò phiên bản database. API nghiệp vụ vẫn cần database hoạt động.
+> Luôn chạy API bằng profile **http** (cổng 5005). Profile https chuyển hướng sang cổng 7147 và làm mất header đăng nhập của website.
 
-## Quy ước
+---
 
-- Base path `/v1`; JSON dùng `snake_case`, query dùng `camelCase`.
-- Endpoint bảo vệ nhận `Authorization: Bearer <token>`. Các route công khai được ghi trong tài liệu endpoint.
-- Giữ response cũ để hạn chế phá client: endpoint cũ có thể trả `{data, request_id}`, endpoint mới thường trả DTO trực tiếp; thanh toán VietQR hóa đơn giữ envelope riêng. Xem ví dụ tích hợp.
-- Một số danh sách cũ dùng `pageSize/pageToken`; các danh sách mới dùng `page/pageSize/search/status`.
-- ID nhân viên thu/tạo/xác nhận được lấy từ tài khoản đăng nhập; trường `employee_id` cũ chỉ giữ tương thích DTO.
-- Phiên JWT cũ cần đăng nhập lại sau lần nâng cấp này. Đổi mật khẩu, khóa tài khoản và đăng xuất có hiệu lực ở backend.
+## 5. Quy ước API
 
-## Kiểm chứng và giới hạn
+- Đường dẫn bắt đầu bằng `/v1`.
+- JSON dùng `snake_case` (vd. `booking_id`); tham số query dùng `camelCase` (vd. `pageSize`).
+- API cần đăng nhập nhận header `Authorization: Bearer <token>`.
+- Phân trang có hai kiểu:
+  - Danh sách mới: `?page=1&pageSize=20&search=...&status=...` → trả `items, total, page, page_size`.
+  - Danh sách cũ (`/bookings`, `/invoices`, `/transactions`): `?pageSize=20&pageToken=...` → trả `items, next_page_token`.
+- Mã nhân viên thực hiện (thu tiền, xác nhận...) lấy từ tài khoản đăng nhập; trường `employee_id` gửi lên chỉ để tương thích.
+- `/v1/app/...`: các danh sách chỉ đọc đã ghép sẵn tên hiển thị cho App quản lý (xem `update_11_1.md`).
 
-Bộ kiểm thử đang dùng `Quanlychuoikhachsan.Api.Tests` gồm kiểm thử nghiệp vụ, HTTP với JWT thật và đối chiếu model/SQL. Dự án test payOS cũ không thuộc solution hiện tại và không đại diện cho tích hợp VietQR.
+---
 
-Đã kiểm thử bằng EF InMemory và sinh SQL bằng provider MySQL; chưa chạy giao dịch đồng thời, khóa dòng, FK hoặc các script trên MySQL/MariaDB thực tế. Chưa gọi ngân hàng hay SMTP thật. Gateway hiện có dùng VietQR sandbox. API hoàn tiền ghi nhận khoản đã hoàn thực tế, không tự chuyển tiền ngân hàng.
+## 6. Quy tắc nghiệp vụ quan trọng
 
-Ảnh phòng được quản lý bằng URL. Thông báo nghiệp vụ được gửi vào hộp thư trong ứng dụng; chưa có push/SMS/email nghiệp vụ ngoài email đặt lại mật khẩu. WinForms có màn hình tổng quan, phòng, booking và lễ tân; các module khác vẫn là màn hình tạm của LMT, dù API nghiệp vụ đã có.
+| Nghiệp vụ | Quy tắc |
+|---|---|
+| Giữ phòng | Booking chưa đủ cọc ở trạng thái `HOLD` trong **15 phút**, quá hạn tự hủy |
+| Nhận phòng | Chỉ khi đã đến ngày lưu trú và mọi phòng ở trạng thái Sẵn sàng |
+| Trả phòng | 3 bước: **chốt hóa đơn → thu tiền → trả phòng**. API từ chối trả phòng khi hóa đơn chưa phát hành hoặc còn nợ |
+| Hóa đơn | Đã phát hành thì không sửa; sai thì hủy và lập lại. Gửi lại cùng `transaction_id` không bị thu hai lần |
+| Thu cọc tại quầy | Có trường `reference` để chống thu trùng khi bấm lại |
+| Hủy booking | Khách gửi yêu cầu → quản lý duyệt. Duyệt tạo phiếu hoàn `CHO_XU_LY`; đây chỉ là ghi nhận, không tự chuyển tiền |
+| Dịch vụ | Hoàn thành yêu cầu dịch vụ tạo hóa đơn dịch vụ riêng, không cộng vào hóa đơn phòng |
+| Kho | Tồn kho tính từ sổ kho; phiếu đã xác nhận không sửa; xuất kho theo lô hết hạn trước (FEFO) |
+
+---
+
+## 7. Vai trò và quyền
+
+Backend luôn kiểm tra quyền ở từng API; App chỉ ẩn nút cho gọn.
+
+**Vai trò mặc định**
+
+| Mã | Vai trò | Mã cũ tương đương |
+|---|---|---|
+| `ADMIN` | Quản trị hệ thống | |
+| `MANAGER` | Quản lý | |
+| `RECEPTIONIST` | Lễ tân | `LE_TAN` |
+| `HOUSEKEEPING` | Buồng phòng | `BUONG_PHONG` |
+| `SERVICE` | Dịch vụ | `DICH_VU` |
+| `WAREHOUSE` | Kho | `KHO` |
+
+App nhận cả mã cũ lẫn mã mới. `seed_api_permissions.sql` cấp quyền cho cả hai bộ mã nếu database cũ còn dùng mã cũ.
+
+**Quyền cần cho các thao tác hay gặp**
+
+| Thao tác | Quyền |
+|---|---|
+| Tạo, sửa booking; nhận phòng | `BOOKING_WRITE` |
+| Thu cọc, thu tiền hóa đơn | `BILLING_PAYMENT_WRITE` |
+| Trả phòng (cả 3 bước) | `BOOKING_WRITE`, `BILLING_READ`, `BILLING_WRITE`, `BILLING_PAYMENT_WRITE` |
+| Duyệt / từ chối hủy | `CANCELLATION_APPROVE` |
+| Đổi trạng thái phòng | `ROOM_WRITE` |
+| Tạo khách vãng lai | `CUSTOMER_WRITE` |
+
+Danh sách đầy đủ quyền của từng API: `API_ENDPOINTS.md`.
+
+---
+
+## 8. Thời gian và múi giờ
+
+- Database lưu thời điểm theo **UTC**. Khách sạn ở UTC+7: nhận phòng 14:00 giờ VN được lưu là 07:00 UTC.
+- Khi gọi API, gửi thời gian kèm `Z` hoặc offset, vd. `2026-11-01T07:00:00Z`.
+- Ngày lưu trú (bảng `gia_dem_dat_phong`, `khoa_lich_phong`) là ngày theo giờ VN, không phải thời điểm.
+- Các route `/v1/front-desk/...` của App nhận và trả giờ VN để tương thích màn hình cũ.
+- **Database cũ:** backend trước đây có chỗ lưu giờ VN, có chỗ lưu UTC. Không tự trừ 7 giờ hàng loạt; tạo lại database từ script là cách đơn giản nhất.
+
+---
+
+## 9. Giới hạn hiện tại
+
+- Kiểm thử tự động chạy trên database giả lập (EF InMemory); chưa kiểm thử khóa dòng, giao dịch đồng thời trên MySQL thật.
+- VietQR dùng môi trường sandbox; chưa gọi ngân hàng hay SMTP thật.
+- Phiếu hoàn tiền chỉ ghi nhận việc đã hoàn, không ra lệnh chuyển tiền.
+- Ảnh phòng lưu bằng đường dẫn URL, chưa có chức năng tải ảnh lên.
+- Thông báo chỉ gửi vào hộp thư trong ứng dụng, chưa có push/SMS/email (trừ email đặt lại mật khẩu).
+
+---
+
+## 10. Tài liệu liên quan
+
+| File | Nội dung |
+|---|---|
+| [API_ENDPOINTS.md](API_ENDPOINTS.md) | Danh mục toàn bộ API và quyền |
+| [API_WORKFLOWS.md](API_WORKFLOWS.md) | Ví dụ gọi API theo luồng: nhập hàng, đặt phòng, thanh toán, hoàn tiền |
+| [API_FUNCTIONAL_COVERAGE.md](API_FUNCTIONAL_COVERAGE.md) | Đối chiếu chức năng trong tài liệu đồ án với API |
+| [openapi.json](openapi.json) | Import vào Postman |
+| [update_11_1.md](update_11_1.md) | Cập nhật 01/11: 8 module App quản lý, API `/v1/app` |

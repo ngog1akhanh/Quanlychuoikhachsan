@@ -19,6 +19,26 @@ Tai khoan (email/identifier): letan@hotel.com
 So dien thoai dang nhap: 0900000001
 Mat khau: 12345
 
+Vai tro: MANAGER (Quan ly)
+Tai khoan (email/identifier): quanly@hotel.com
+So dien thoai dang nhap: 0900000002
+Mat khau: 12345
+
+Vai tro: HOUSEKEEPING (Buong phong)
+Tai khoan (email/identifier): buongphong@hotel.com
+So dien thoai dang nhap: 0900000003
+Mat khau: 12345
+
+Vai tro: SERVICE (Dich vu)
+Tai khoan (email/identifier): dichvu@hotel.com
+So dien thoai dang nhap: 0900000004
+Mat khau: 12345
+
+Vai tro: WAREHOUSE (Kho)
+Tai khoan (email/identifier): kho@hotel.com
+So dien thoai dang nhap: 0900000005
+Mat khau: 12345
+
 2. WEBSITE DAT PHONG (khach hang)
 ---------------------------------
 Tai khoan: an.nguyen@example.com

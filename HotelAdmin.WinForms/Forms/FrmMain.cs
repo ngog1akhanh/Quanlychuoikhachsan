@@ -267,6 +267,14 @@ public sealed class FrmMain : Form
             "rooms" => new RoomsPage(api, session),          // Giai đoạn 1A
             "bookings" => new BookingsPage(api, session),    // Giai đoạn 1B
             "frontdesk" => new FrontDeskPage(api, session),  // Giai đoạn 1C
+            "billing" => new BillingPage(api, session),
+            "housekeeping" => new HousekeepingPage(api, session),
+            "services" => new ServicesPage(api, session),
+            "customers" => new CustomersPage(api, session),
+            "reports" => new ReportsPage(api, session),
+            "pricing" => new PricingPage(api, session),
+            "staff" => new StaffPage(api, session),
+            "inventory" => new InventoryPage(api, session),
             _ => new ModulePlaceholderPage(api, session, module)
         };
 

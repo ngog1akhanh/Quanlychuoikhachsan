@@ -12,8 +12,8 @@ Một solution duy nhất: `HeThongQuanLyKhachSan.sln` (mở được trên mọ
 | `scripts/` | Script sinh tài liệu API / seed quyền | Python | |
 
 ## Chạy lần đầu
-1. Cài .NET 9 SDK và MySQL 8. Tạo DB, chạy lần lượt 4 script trong `Quanlychuoikhachsan/Database/Scripts/` (thứ tự ghi trong `docs/HUONG_DAN_BACKEND.md`).
-2. Đặt chuỗi kết nối và khóa JWT bằng User Secrets (xem `docs/HUONG_DAN_BACKEND.md`). Tạo một tài khoản nhân viên có vai trò `ADMIN`.
+1. Cài .NET 9 SDK và MySQL 8. Tạo DB, chạy lần lượt 5 script (4 script schema/quyền + `seed_demo.sql`) trong `Quanlychuoikhachsan/Database/Scripts/` (thứ tự ghi trong `docs/HUONG_DAN_BACKEND.md`).
+2. Đặt chuỗi kết nối và khóa JWT bằng User Secrets (xem `docs/HUONG_DAN_BACKEND.md`). Tài khoản demo nằm trong `tai khoan test demo.txt` (admin: `admin.com` / `12345`).
 3. Chạy cả API + Web + App quản lý cùng lúc, chọn một trong hai cách:
    - **Visual Studio:** mở `HeThongQuanLyKhachSan.sln`, ở thanh công cụ chọn mục chạy **"Chay ca API + Web + App"** (lấy từ file `HeThongQuanLyKhachSan.slnLaunch`) rồi nhấn F5. Nếu VS không hiện mục này: chuột phải Solution → *Configure Startup Projects…* → *Multiple startup projects*, đặt 3 project `Quanlychuoikhachsan`, `QuanLyKhachSan.Web`, `HotelAdmin.WinForms` thành **Start** (để API ở trên cùng).
    - **Không cần Visual Studio:** nhấp đúp `chay-he-thong.bat`. File này mở API, đợi API sẵn sàng rồi mới mở Web (cổng 5100) và App quản lý.

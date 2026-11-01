@@ -1,14 +1,38 @@
-# WinForms quản lý khách sạn
+# App quản lý khách sạn (WinForms)
 
-Ứng dụng .NET 9 dành cho Windows, lấy từ nhánh LMT và tích hợp với backend mới trong cùng solution.
+Ứng dụng Windows (.NET 9) cho nhân viên khách sạn, gọi REST API của backend `Quanlychuoikhachsan`.
 
-- Build: `dotnet build ../HeThongQuanLyKhachSan.sln` từ thư mục này.
-- Cấu hình URL server tại `appsettings.json`, khóa `ApiBaseUrl`.
-- Chạy: `dotnet run --project HotelAdmin.WinForms.csproj`.
-- Đăng nhập bằng tài khoản nhân viên đang hoạt động đã được gán vai trò/quyền trong database.
+## Chạy
 
-Đã có màn hình tổng quan, quản lý phòng, đặt phòng và lễ tân. Các module còn lại giữ màn hình tạm; danh sách API trên màn hình không có nghĩa giao diện nghiệp vụ đã hoàn tất.
+1. Chạy backend trước (profile **http**, cổng 5005).
+2. Kiểm tra `appsettings.json` → `ApiBaseUrl` trỏ đúng địa chỉ backend.
+3. Chạy app: `dotnet run --project HotelAdmin.WinForms.csproj`, hoặc nhấp đúp `chay-he-thong.bat` ở thư mục gốc để mở cả API, Web và App.
+4. Đăng nhập bằng tài khoản trong `tai khoan test demo.txt` (mật khẩu `12345`).
 
-Trả phòng thực hiện lần lượt: chốt hóa đơn, xác nhận thu tiền, trả phòng. Không nhập lại tiền phụ thu tự động vào ô phụ thu thêm.
+## Các module
 
-Chi tiết về tương thích, mã vai trò, UTC, script database và kiểm thử xem [hướng dẫn tích hợp](../docs/LMT_INTEGRATION.md).
+| Nhóm | Module |
+|---|---|
+| Vận hành | Tổng quan · Đặt phòng · Nhận/trả phòng · Phòng · Buồng phòng · Dịch vụ |
+| Tài chính | Hóa đơn & thanh toán · Giá phòng & chính sách |
+| Khách hàng | Khách hàng & đánh giá |
+| Kho | Kho & tài sản |
+| Hệ thống | Nhân viên & phân quyền · Báo cáo |
+
+Menu và nút thao tác hiện theo vai trò, quyền của tài khoản đăng nhập.
+
+## Cấu trúc thư mục
+
+| Thư mục | Chứa gì |
+|---|---|
+| `Pages/` | Mỗi module một trang; trang nhiều tab kế thừa `ModulePage` |
+| `Controls/` | Control tự vẽ (nút, thẻ, biểu đồ, lưới) và `DataView` – danh sách dùng chung |
+| `Forms/Dialogs/` | Hộp thoại; `FormDialog` dựng form nhập theo khai báo trường |
+| `Services/` | `ApiClient` gọi API, `Lookups` tải danh mục cho ComboBox |
+| `Models/` | Model dữ liệu; `J` đọc JSON an toàn |
+| `Theme/` | Màu, font, icon, nhãn tiếng Việt cho mã trạng thái |
+
+## Ghi chú
+
+- Trả phòng gồm 3 bước: **chốt hóa đơn → xác nhận đã thu tiền → trả phòng**.
+- Chi tiết thay đổi đợt 01/11: [docs/update_11_1.md](../docs/update_11_1.md).
