@@ -39,7 +39,12 @@ public sealed class HousekeepingService(HotelDbContext db, CurrentActor actor) :
         if (!await db.Phongs.AnyAsync(x => x.Id == request.RoomId, ct)) throw new ResourceNotFoundException("Room was not found.");
         var condition = new TinhTrangPhong { PhongId = request.RoomId, DatPhongId = request.BookingId, TaiSanCaTheId = request.AssetId, LoaiTinhTrang = request.Type, MucDo = request.Severity, MoTa = request.Description, AnhMinhChung = request.Evidence, ChiPhiDuKien = request.EstimatedCost, ChiPhiThucTe = request.ActualCost, DoKhachGayRa = request.CausedByGuest, GhiNhanLuc = DateTime.UtcNow };
         condition.NhanVienGhiNhanId = await actor.EmployeeIdAsync(ct);
-        if (request.Severity == "NGHIEM_TRONG") (await db.Phongs.SingleAsync(x => x.Id == request.RoomId, ct)).TrangThai = "BAO_TRI";
+        if (request.Severity == "NGHIEM_TRONG")
+        {
+            // Phòng đang có khách thì giữ trạng thái DANG_O; chuyển bảo trì sau khi khách trả phòng.
+            var room = await db.Phongs.SingleAsync(x => x.Id == request.RoomId, ct);
+            if (room.TrangThai != "DANG_O") room.TrangThai = "BAO_TRI";
+        }
         db.TinhTrangPhongs.Add(condition); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return new(condition.Id, condition.PhongId, condition.LoaiTinhTrang, condition.TrangThaiXuLy, condition.ChiPhiThucTe, condition.DoKhachGayRa);
     }

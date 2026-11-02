@@ -1,0 +1,67 @@
+<EditForm Model="Model" OnValidSubmit="HandleValidSubmit" FormName="guest-info">
+    <DataAnnotationsValidator />
+
+    <div class="grid-2">
+        <div class="form-group">
+            <label class="form-label">Họ và tên *</label>
+            <InputText class="form-control" @bind-Value="Model.FullName" placeholder="Nguyễn Văn A" />
+            <ValidationMessage For="() => Model.FullName" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Số điện thoại *</label>
+            <InputText class="form-control" @bind-Value="Model.PhoneNumber" placeholder="09xx xxx xxx" />
+            <ValidationMessage For="() => Model.PhoneNumber" />
+        </div>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Email *</label>
+        <InputText class="form-control" @bind-Value="Model.Email" placeholder="email@example.com" />
+        <ValidationMessage For="() => Model.Email" />
+    </div>
+    <div class="form-group">
+        <label class="form-label">Yêu cầu đặc biệt (tuỳ chọn)</label>
+        <InputTextArea class="form-control" @bind-Value="Model.SpecialRequest" rows="3" placeholder="Ví dụ: tầng cao, giường phụ, nhận phòng sớm..." />
+        <ValidationMessage For="() => Model.SpecialRequest" />
+    </div>
+
+    <div class="form-group">
+        <label class="form-check">
+            <InputCheckbox @bind-Value="Model.AcceptPolicy" />
+            <span>Tôi đã đọc và đồng ý với <a href="/#chinh-sach" target="_blank">chính sách đặt cọc &amp; hủy phòng</a>.</span>
+        </label>
+        @if (_showPolicyError && !Model.AcceptPolicy)
+        {
+            <div class="field-error">Vui lòng đồng ý với chính sách để tiếp tục.</div>
+        }
+    </div>
+
+    @if (!string.IsNullOrEmpty(Error))
+    {
+        <div class="alert alert-danger">@Error</div>
+    }
+
+    <button type="submit" class="btn btn-primary btn-lg btn-block" disabled="@Busy">
+        @if (Busy) { <span class="spinner sm"></span> }
+        @SubmitText
+    </button>
+</EditForm>
+
+@code {
+    [Parameter, EditorRequired] public GuestInformation Model { get; set; } = new();
+    [Parameter] public EventCallback OnSubmit { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public string? Error { get; set; }
+    [Parameter] public string SubmitText { get; set; } = "Tiếp tục";
+
+    private bool _showPolicyError;
+
+    private async Task HandleValidSubmit()
+    {
+        if (!Model.AcceptPolicy)
+        {
+            _showPolicyError = true;
+            return;
+        }
+        await OnSubmit.InvokeAsync();
+    }
+}

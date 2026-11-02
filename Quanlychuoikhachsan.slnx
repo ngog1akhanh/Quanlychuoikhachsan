@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="Quanlychuoikhachsan/Quanlychuoikhachsan.csproj" />
-  <Project Path="Quanlychuoikhachsan.Api.Tests/Quanlychuoikhachsan.Api.Tests.csproj" />
-  <Project Path="HotelAdmin.WinForms/HotelAdmin.WinForms.csproj" />
-</Solution>

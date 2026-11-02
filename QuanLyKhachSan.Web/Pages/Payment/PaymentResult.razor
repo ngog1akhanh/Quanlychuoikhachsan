@@ -1,0 +1,53 @@
+@page "/payment/result"
+
+<PageTitle>Kết quả thanh toán – @HotelInfo.Name</PageTitle>
+
+<div class="container section">
+    @if (IsSuccess)
+    {
+        <div class="card result-card">
+            <div class="result-icon ok">✓</div>
+            <h2>Đặt phòng thành công!</h2>
+            <p>Mã booking: <b>@Code</b> · <span class="badge badge-ok">Đã xác nhận</span></p>
+            @if (Amount > 0)
+            {
+                <p>Tiền cọc đã thanh toán: <b>@Fmt.Money(Amount)</b> · Trạng thái giao dịch: <span class="badge badge-ok">Thành công</span></p>
+            }
+            <p class="muted small">Thông tin booking đã được lưu trong tài khoản của bạn. Vui lòng mang theo CCCD/hộ chiếu khi nhận phòng (từ @HotelInfo.CheckInTime).</p>
+            <div class="flex gap-1 center-y" style="justify-content:center;flex-wrap:wrap">
+                @if (BookingId > 0)
+                {
+                    <a class="btn btn-primary" href="booking/@BookingId">Xem chi tiết booking</a>
+                }
+                <a class="btn btn-outline" href="account/bookings">Lịch sử đặt phòng</a>
+            </div>
+        </div>
+    }
+    else
+    {
+        <div class="card result-card">
+            <div class="result-icon fail">✕</div>
+            <h2>Thanh toán chưa thành công</h2>
+            @if (!string.IsNullOrEmpty(Code))
+            {
+                <p>Mã booking: <b>@Code</b> · Trạng thái giao dịch: <span class="badge badge-danger">Thất bại</span></p>
+            }
+            <p class="muted">@(string.IsNullOrEmpty(Message) ? "Giao dịch bị hủy hoặc gặp lỗi. Phòng chỉ được giữ trong thời gian quy định." : Message)</p>
+            <div class="flex gap-1 center-y" style="justify-content:center;flex-wrap:wrap">
+                <a class="btn btn-primary" href="checkout">Thử thanh toán lại</a>
+                <a class="btn btn-outline" href="rooms">Tìm phòng khác</a>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    // Cổng thanh toán (VNPay/MoMo) sau này sẽ redirect về đây kèm tham số; hiện tại Checkout tự điều hướng.
+    [SupplyParameterFromQuery(Name = "status")] public string? Status { get; set; }
+    [SupplyParameterFromQuery(Name = "code")] public string? Code { get; set; }
+    [SupplyParameterFromQuery(Name = "bookingId")] public long BookingId { get; set; }
+    [SupplyParameterFromQuery(Name = "amount")] public decimal Amount { get; set; }
+    [SupplyParameterFromQuery(Name = "message")] public string? Message { get; set; }
+
+    private bool IsSuccess => string.Equals(Status, "success", StringComparison.OrdinalIgnoreCase);
+}

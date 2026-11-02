@@ -1,6 +1,6 @@
 # Danh mục API
 
-Tổng hiện tại: **223 thao tác HTTP** trên **178 đường dẫn** (bao gồm API có sẵn và API bổ sung).
+Tổng hiện tại: **240 thao tác HTTP** trên **195 đường dẫn** (bao gồm API có sẵn và API bổ sung).
 
 Sinh từ Swagger và metadata phân quyền của HTTP test host. Body/response chi tiết xem [OpenAPI](openapi.json); luồng sử dụng xem [hướng dẫn](API_WORKFLOWS.md).
 
@@ -27,6 +27,28 @@ Cột quyền thể hiện yêu cầu khai báo ở controller. Các API JWT t�
 | PUT | `/v1/roles/{id}/permissions` | ROLE_WRITE |
 | POST | `/v1/staff` | STAFF_WRITE |
 | PUT | `/v1/staff/{id}` | STAFF_WRITE |
+
+## AppViews
+
+| Method | Endpoint | Quyền truy cập |
+|---|---|---|
+| GET | `/v1/app/active-stays` | SERVICE_READ |
+| GET | `/v1/app/assets` | INVENTORY_READ |
+| GET | `/v1/app/cancellation-policies` | PRICING_WRITE |
+| GET | `/v1/app/customers` | CUSTOMER_READ |
+| GET | `/v1/app/deposits` | BILLING_READ |
+| GET | `/v1/app/employees` | HOUSEKEEPING_READ |
+| GET | `/v1/app/housekeeping-tasks` | HOUSEKEEPING_READ |
+| GET | `/v1/app/inventory-items` | INVENTORY_READ |
+| GET | `/v1/app/invoices` | BILLING_READ |
+| GET | `/v1/app/refunds` | BILLING_READ |
+| GET | `/v1/app/reviews` | REVIEW_MANAGE |
+| GET | `/v1/app/room-conditions` | HOUSEKEEPING_READ |
+| GET | `/v1/app/rooms` | INVENTORY_READ |
+| GET | `/v1/app/service-invoices` | BILLING_READ |
+| GET | `/v1/app/service-requests` | SERVICE_READ |
+| GET | `/v1/app/shifts` | BILLING_READ |
+| GET | `/v1/app/staff` | STAFF_READ |
 
 ## Assets
 

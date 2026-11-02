@@ -1,7 +1,9 @@
 # Database tương thích với API và WinForms LMT
 
 Đã tạo bản cài mới: [`hotel_management_compatible.sql`](../Quanlychuoikhachsan/Database/Install/hotel_management_compatible.sql).
-Database mặc định tên `hotel_management_compatible`, gồm **67 bảng, 5 view, 6 vai trò và 42 quyền**. Không có tài khoản/mật khẩu ứng dụng mặc định hoặc giao dịch mẫu.
+Database mặc định tên `hotel_management_compatible`, gồm **67 bảng, 5 view, 6 vai trò và 42 quyền**. Bundle không có tài khoản/mật khẩu ứng dụng mặc định hoặc giao dịch mẫu.
+
+Nhánh tích hợp LMT mới có thêm `Database/Scripts/seed_demo.sql` tùy chọn. Sau khi import bundle, chọn đúng database rồi chạy seed để có 10 tài khoản, 24 phòng và dữ liệu giao dịch thử; xem [lệnh import](../README.md#chuẩn-bị-database). Seed không có `USE` cố định, không nằm trong bundle. Chỉ dùng cho database demo, không áp dụng vào dữ liệu đang vận hành; đã kiểm tra chạy lặp trong cùng ngày, không dùng để reseed vào ngày khác.
 
 ## Nguồn và kết quả đối chiếu
 
@@ -66,14 +68,15 @@ Sau đó cấu hình JWT và các tích hợp cần dùng theo [README](../READM
 
 Tài khoản đăng nhập nghiệp vụ đầu tiên phải có password hash ASP.NET Core Identity, `loai_tai_khoan='NHAN_VIEN'`, trạng thái `HOAT_DONG`, hồ sơ `nhan_vien` ở trạng thái `DANG_LAM`, và liên kết vai trò `ADMIN`. Tài khoản DB kết nối server không phải tài khoản đăng nhập API. Bộ cài không đặt mật khẩu quản trị chung cho mọi máy.
 
-Repo chỉ chia sẻ schema, seed danh mục/quyền và công cụ kiểm chứng. Dữ liệu vật lý của server, thông tin kết nối riêng, thư mục `review`, tài khoản và giao dịch của từng máy không nằm trong bộ cài.
+Repo chia sẻ schema, seed danh mục/quyền, seed demo tùy chọn và công cụ kiểm chứng. Dữ liệu vật lý của server, thông tin kết nối riêng, thư mục `review`, tài khoản và giao dịch thật của từng máy không nằm trong bộ cài.
 
 ## Kiểm chứng và tái tạo
 
-Ngày kiểm chứng: 2026-11-02. **55/55 test đạt**, không bỏ qua test nào trong lần chạy có MariaDB:
+Ngày kiểm chứng cập nhật: 2026-11-03. **60/60 test đạt**, không bỏ qua test nào trong lần chạy có MariaDB:
 
-- 51 test API/nghiệp vụ hiện có.
-- 4 test tích hợp mới: cài toàn bộ bundle; đối chiếu model với tên cột, nullability, kiểu dữ liệu, precision/scale, độ dài khai báo và PK; chạy các query EF và 5 view; kiểm tra quyền ADMIN.
+- 53 test API/nghiệp vụ, gồm hồi quy giữ trạng thái phòng đang ở và biên ngày Việt Nam trong báo cáo.
+- 7 test MariaDB: 4 test schema/nghiệp vụ từ lần trước và 3 test mới về seed/API app/phân quyền, client web/đặt phòng/cọc/hủy, hai yêu cầu đặt cùng phòng đồng thời.
+- Cài toàn bộ bundle; đối chiếu model với tên cột, nullability, kiểu dữ liệu, precision/scale, độ dài khai báo và PK; chạy các query EF và 5 view; kiểm tra quyền ADMIN.
 - Luồng service nhập 1.125 đơn vị, xác nhận, từ chối xác nhận lặp, xuất 0.125 và đối chiếu tồn 1.000; kiểm tra FK sai kho/lô, CHECK số lượng âm và rollback.
 - Chặn hai booking cùng phòng/ngày, trùng đơn cọc cùng booking và trùng transaction VietQR; đối chiếu công nợ loại hóa đơn nháp/hủy.
 - Kết nối EF đồng bộ/bất đồng bộ đều đặt UTC sau khi mở lại.
@@ -85,7 +88,7 @@ dotnet test Quanlychuoikhachsan.Api.Tests/Quanlychuoikhachsan.Api.Tests.csproj -
 python scripts/build_database.py --check
 ```
 
-Mỗi test tạo database `hotel_compat_test_<GUID>` rồi chỉ xóa database do test đó tạo. Nếu không đặt biến môi trường, 4 test tích hợp sẽ báo **Skipped**, không được coi là đã kiểm chứng server thật.
+Mỗi test tạo database `hotel_compat_test_<GUID>` rồi chỉ xóa database do test đó tạo. Nếu không đặt biến môi trường, 7 test tích hợp sẽ báo **Skipped**, không được coi là đã kiểm chứng server thật.
 
 File bundle được sinh từ 4 script trong `Database/Scripts` cộng `Database/Install/compatible_constraints.sql`. Chạy `python scripts/build_database.py` sau khi sửa các nguồn. Các script gốc được giữ để đối chiếu; không chạy lại 4 script đó sau khi đã import bundle.
 

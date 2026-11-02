@@ -1,0 +1,25 @@
+[
+  {
+    "Name": "Chay ca API + Web + App",
+    "Projects": [
+      {
+        "Path": "Quanlychuoikhachsan\\Quanlychuoikhachsan.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      },
+      {
+        "Path": "QuanLyKhachSan.Web\\QuanLyKhachSan.Web.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      },
+      {
+        "Path": "HotelAdmin.WinForms\\HotelAdmin.WinForms.csproj",
+        "Action": "Start"
+      },
+      {
+        "Path": "Quanlychuoikhachsan.Api.Tests\\Quanlychuoikhachsan.Api.Tests.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

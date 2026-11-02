@@ -1,13 +1,12 @@
-# Tích hợp LMT với API mới
+# Tích hợp LMT với API mới — 03/11/2026
 
 ## Nguồn và nhánh làm việc
 
-- Nhánh chính của repo là `master` (`cc0ed99`), không có nhánh `main`.
-- `lmt` (`4170245`) bổ sung `Quanlychuoikhachsan-master.rar` trên nền `master`.
-- Nhánh tích hợp: `codex/integrate-lmt-api`, tạo từ `lmt`.
-- Bộ API mới được khôi phục từ stash `On master: !!GitHub_Desktop<master>` bằng `stash apply`. Stash vẫn được giữ nguyên.
-- WinForms và các hợp đồng API lễ tân/phòng được lấy từ RAR. Không đưa `bin`, `obj`, `.vs`, bản sao database hoặc cấu hình máy cũ vào mã nguồn tích hợp.
-- Mã tích hợp đã được lưu trên nhánh `codex/integrate-lmt-api` (commit nền `b65ef24`). Khi chia sẻ bản mới, dùng solution trong repo, không giải nén RAR cũ đè lên mã nguồn này.
+- Nhánh nhận: `codex/integrate-lmt-api`, nền trước merge `78887f5` (đã có bộ SQL tương thích).
+- Nguồn merge: `origin/lmt` tại `db1d4c1`, gồm module LMT ở `3fad2eb` và website từ Trung ở `ec459d5`.
+- Giữ nguyên nhánh `lmt`; chỉ commit/push nhánh tích hợp. Lịch sử hai nhánh được giữ bằng merge commit.
+- Dùng source trong `HeThongQuanLyKhachSan.sln`; RAR cũ và project thử payOS không còn dùng đã được LMT bỏ. Không giải nén RAR đè lên source hiện tại.
+- Bốn project backend, web, WinForms và tests thống nhất .NET 10. EF Core/Pomelo vẫn dùng 9 để giữ tương thích database.
 - Bộ cài database cho người clone mới nằm tại `Database/Install/hotel_management_compatible.sql` trong project backend; xem [hướng dẫn database](DATABASE_COMPATIBILITY.md).
 
 ## Nguyên tắc hợp nhất
@@ -58,23 +57,28 @@ WinForms nhận cả hai mã khi dựng menu; backend luôn kiểm tra quyền t
 ## Chạy solution
 
 1. Chuẩn bị database và cấu hình backend theo [README](../README.md).
-2. Build `Quanlychuoikhachsan.slnx` (backend, tests và WinForms).
+2. Build `HeThongQuanLyKhachSan.sln` (backend, web, tests và WinForms).
 3. Chạy backend. Chỉnh `HotelAdmin.WinForms/appsettings.json` → `ApiBaseUrl` về URL backend đang chạy.
 4. Chạy WinForms trên Windows, đăng nhập lại để nhận JWT hợp lệ với phiên bản mới.
 
 ```powershell
-dotnet build Quanlychuoikhachsan.slnx
+dotnet build HeThongQuanLyKhachSan.sln
 dotnet test Quanlychuoikhachsan.Api.Tests/Quanlychuoikhachsan.Api.Tests.csproj
-dotnet run --project Quanlychuoikhachsan
+dotnet run --project Quanlychuoikhachsan --launch-profile http
 ```
 
-Trong terminal khác:
+Trong các terminal khác:
 
 ```powershell
 dotnet run --project HotelAdmin.WinForms
+dotnet run --project QuanLyKhachSan.Web --launch-profile http
 ```
 
-Các màn hình thực thi đã có từ LMT: tổng quan, phòng, đặt phòng và lễ tân. Các module khác vẫn là màn hình tạm của WinForms; API đã có không đồng nghĩa toàn bộ giao diện đã được triển khai. Danh mục API trên các màn hình tạm đã được cập nhật theo route mới.
+LMT đã bổ sung 8 module WinForms: hóa đơn, buồng phòng, dịch vụ, khách hàng, báo cáo, giá/chính sách, nhân viên/phân quyền, kho/tài sản. Cùng 4 trang cũ, tổng cộng 12 trang thực thi. Controller `AppViews` bổ sung 17 API GET `/v1/app/...` ghép tên hiển thị, dùng cùng database và hệ thống quyền; thao tác ghi vẫn gọi các service nghiệp vụ hiện hữu.
+
+Website Blazor dùng API thật khi `Api:UseMockData=false`. Trang chủ lấy loại phòng và giá cơ bản từ database; link chọn loại phòng truyền đúng query `type`. Giá cuối cùng theo ngày lưu trú được lấy khi tìm và đặt phòng.
+
+`seed_demo.sql` là tùy chọn, chạy trên database demo đã chọn, lưu timestamp UTC và tính ngày demo theo Việt Nam. Bundle cài mới vẫn độc lập dữ liệu demo và không tạo mật khẩu quản trị chung.
 
 ## Clean code
 
@@ -85,13 +89,31 @@ Các màn hình thực thi đã có từ LMT: tổng quan, phòng, đặt phòng
 - Dọn sáu cảnh báo WinForms về nullability/tên property che khuất `Control.Created`; sửa lifetime của HTTP request và chỉ chuyển tiếp Bearer khi redirect nâng HTTP lên HTTPS cùng host.
 - Giữ `LangVersion=13.0` ở backend để các biểu thức LINQ `Contains` tương thích EF Core/Pomelo 9.
 - Thư mục `review/` chỉ dùng đối chiếu và được bỏ qua bởi Git.
+- Sửa query tổng tồn kho `/v1/inventory-items` bị lỗi 500 trên MariaDB do SUM lồng truy vấn GROUP BY; tính trực tiếp từ sổ giao dịch kho.
+- Báo cáo doanh thu dùng biên ngày Việt Nam quy về UTC và nhóm theo ngày Việt Nam, tránh mất doanh thu 00:00–07:00 hoặc cộng nhầm ngày tiếp theo.
+- Giữ sửa lỗi housekeeping của LMT: ghi sự cố nghiêm trọng không tự chuyển phòng đang có khách từ `DANG_O` sang `BAO_TRI`.
+- Web chỉ giữ cấu hình API; bỏ các mục DB/JWT không dùng. Cập nhật MySqlConnector lên 2.6.1 theo [bản vá chính thức](https://github.com/advisories/GHSA-473q-m89c-ghf8).
 
 ## Kiểm chứng
 
 - Build cả solution: **0 lỗi, 0 cảnh báo**.
-- **55/55 kiểm thử** qua: 51 test API/nghiệp vụ và 4 test tích hợp MariaDB thật.
+- **60/60 kiểm thử** qua, 0 bỏ qua: 53 test nghiệp vụ/HTTP và 7 test tích hợp MariaDB thật. TRX sinh trong `review/test-results/` khi dùng logger TRX; không commit dữ liệu QA.
 - HTTP tests gọi trực tiếp `ApiClient` và DTO của WinForms: hồ sơ nhân viên/khách, cọc và thử lại, nhận/trả phòng chỉ một hóa đơn, thanh toán chỉ một lần, công việc dọn phòng không trùng, hủy qua route cũ/duyệt qua route mới, quyền thu tiền, giới hạn khách, trạng thái phòng và ngày lưu trú quanh nửa đêm.
-- OpenAPI: **223 thao tác HTTP / 178 đường dẫn**, không có action trùng. Xem [danh mục](API_ENDPOINTS.md) và [JSON](openapi.json).
-- Đã kiểm tra import SQL, model, FK/CHECK/unique, rollback, nhập/xuất, booking/VietQR, công nợ và UTC trên MariaDB 11.4.13. Xem [phạm vi kiểm chứng](DATABASE_COMPATIBILITY.md#kiểm-chứng-và-tái-tạo). **Chưa kiểm thử cạnh tranh đồng thời, MySQL riêng, ngân hàng, SMTP hay tương tác trực tiếp toàn bộ màn hình WinForms.**
+- OpenAPI: **240 thao tác HTTP / 195 đường dẫn**, không có action trùng. Xem [danh mục](API_ENDPOINTS.md) và [JSON](openapi.json).
+- MariaDB 11.4.13: import bundle, model, FK/CHECK/unique, rollback, nhập/xuất, công nợ, UTC; chạy seed demo hai lần cùng ngày không tăng số booking/hóa đơn. Toàn bộ 17 route app trả đúng quyền: chưa đăng nhập 401, khách 403, admin 200; nhân viên kho không đọc được danh sách nhân viên.
+- Hai HTTP request đặt cùng phòng/ngày đồng thời: một 201, một 409, đúng hai khóa cho hai đêm.
+- Client web thật gọi API test host/database thật: đăng nhập, danh mục/giá trang chủ, tìm phòng, tạo HOLD, lịch sử, sửa ghi chú, tạo cọc, inquiry PAID lặp không thu hai lần, BOOKED và gửi yêu cầu hủy. Chỉ gateway ngân hàng được thay bằng fake.
+- WinForms smoke với API/DB chạy thật: **12 trang, 39 tab; 79 request trên 50 đường dẫn API**, không lỗi HTTP. Đã xem ảnh render màn hình kho/báo cáo. Công cụ tải trang/tab, không bấm mọi nút CRUD.
+- Trình duyệt: đăng nhập tài khoản khách demo, tìm phòng; kiểm tra danh mục/giá thật trên trang chủ và lọc Suite từ link trang chủ.
+
+Chạy lại kiểm tra màn hình trên database demo (API đang chạy):
+
+```powershell
+$env:HOTEL_SMOKE_IDENTIFIER = 'admin.com'
+$env:HOTEL_SMOKE_PASSWORD = '12345' # Chỉ dùng với seed demo.
+dotnet run --project tools/WinFormsSmoke -- http://localhost:5005/ review/winforms-acceptance
+```
+
+Phạm vi còn lại: chưa kiểm thử tải nhiều người dùng, deadlock diện rộng, MySQL riêng, ngân hàng/SMTP thật hoặc mọi thao tác ghi trên từng màn hình. Kết quả trên xác nhận các luồng đã kiểm tra, không phải cam kết không còn lỗi trong mọi tình huống.
 
 Sau khi chạy test, sinh lại tài liệu bằng `python scripts/export_api_docs.py`. Khi đổi phân quyền controller, sinh lại SQL bằng `python scripts/generate_api_permissions.py` rồi rà soát trước khi áp dụng vào database.

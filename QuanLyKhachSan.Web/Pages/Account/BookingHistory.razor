@@ -1,0 +1,116 @@
+@page "/account/bookings"
+@inject AuthState Auth
+@inject BookingService BookingSvc
+@inject NavigationManager Nav
+
+<PageTitle>Lịch sử đặt phòng – @HotelInfo.Name</PageTitle>
+
+<div class="container section" style="max-width:900px">
+    <div class="flex between center-y flex-wrap gap-2 mb-2">
+        <h1 class="page-title mb-0">Booking của tôi</h1>
+        <a class="btn btn-primary" href="rooms">+ Đặt phòng mới</a>
+    </div>
+
+    @if (_loading)
+    {
+        <Loading />
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    else
+    {
+        <div class="tabs">
+            @foreach (var (key, label) in Tabs)
+            {
+                var k = key;
+                <button type="button" class="chip @(_filter == k ? "on" : "")" @onclick="() => SetFilter(k)">@label</button>
+            }
+        </div>
+
+        @if (Filtered.Count == 0)
+        {
+            <div class="empty">Không có booking nào.</div>
+        }
+        else
+        {
+            @foreach (var b in PageItems)
+            {
+                <div class="bk-item">
+                    <div>
+                        <div><span class="code">@b.BookingCode</span> <span class="badge @BookingStatus.CssClass(b.Status)">@BookingStatus.Label(b.Status)</span></div>
+                        <div class="muted small">@Fmt.Date(b.CheckIn) → @Fmt.Date(b.CheckOut) · @Fmt.Money(b.Total)</div>
+                    </div>
+                    <div class="bk-actions">
+                        <a class="btn btn-outline btn-sm" href="booking/@b.Id">Chi tiết</a>
+                        @if (BookingStatus.CanCancel(b.Status))
+                        {
+                            <a class="btn btn-danger btn-sm" href="booking/@b.Id/cancel">Yêu cầu hủy</a>
+                        }
+                        @if (BookingStatus.CanReview(b.Status))
+                        {
+                            <a class="btn btn-primary btn-sm" href="reviews/create/@b.Id">Đánh giá</a>
+                        }
+                    </div>
+                </div>
+            }
+            <Pagination Page="_page" TotalPages="TotalPages" PageChanged="p => _page = p" />
+        }
+    }
+</div>
+
+@code {
+    private const int PageSize = 6;
+
+    private static readonly (string Key, string Label)[] Tabs =
+    {
+        ("all", "Tất cả"),
+        ("upcoming", "Sắp tới"),
+        ("stay", "Đang lưu trú"),
+        ("done", "Đã trả phòng"),
+        ("cancelled", "Đã hủy / không đến"),
+    };
+
+    private List<BookingListItem> _all = new();
+    private string _filter = "all";
+    private int _page = 1;
+    private bool _loading = true;
+    private string? _error;
+
+    private List<BookingListItem> Filtered => _all.Where(Match).ToList();
+    private int TotalPages => (int)Math.Ceiling(Filtered.Count / (double)PageSize);
+    private IEnumerable<BookingListItem> PageItems => Filtered.Skip((_page - 1) * PageSize).Take(PageSize);
+
+    private bool Match(BookingListItem b) => _filter switch
+    {
+        "upcoming" => b.Status is BookingStatus.Hold or BookingStatus.WaitingDeposit or BookingStatus.Booked,
+        "stay" => b.Status == BookingStatus.CheckedIn,
+        "done" => b.Status == BookingStatus.CheckedOut,
+        "cancelled" => b.Status is BookingStatus.Cancelled or BookingStatus.NoShow,
+        _ => true
+    };
+
+    private void SetFilter(string key)
+    {
+        _filter = key;
+        _page = 1;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!await Auth.RequireLoginAsync(Nav)) return;
+        try
+        {
+            _all = await BookingSvc.GetMyBookingsAsync();
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

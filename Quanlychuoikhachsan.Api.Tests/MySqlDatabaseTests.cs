@@ -22,7 +22,7 @@ public sealed class MySqlFactAttribute : FactAttribute
     }
 }
 
-public sealed class MySqlDatabaseTests(ITestOutputHelper output)
+public sealed partial class MySqlDatabaseTests(ITestOutputHelper output)
 {
     [MySqlFact]
     public async Task Install_matches_model_columns_keys_precision_and_permissions()

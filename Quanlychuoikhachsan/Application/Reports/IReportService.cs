@@ -1,3 +1,4 @@
+using Quanlychuoikhachsan.Application.Common;
 using Microsoft.EntityFrameworkCore;
 using Quanlychuoikhachsan.Domain.Entities;
 using Quanlychuoikhachsan.Infrastructure.Persistence;
@@ -16,7 +17,7 @@ public sealed class ReportService(HotelDbContext db) : IReportService
 {
     public async Task<DashboardResponse> DashboardAsync(ReportRange range, CancellationToken ct)
     {
-        var revenue = await RevenueAsync(range, ct); var occupancy = await OccupancyAsync(range, ct); var bookings = await db.DatPhongs.CountAsync(x => x.NgayDat >= range.From.ToDateTime(TimeOnly.MinValue) && x.NgayDat < range.To.AddDays(1).ToDateTime(TimeOnly.MinValue), ct);
+        var revenue = await RevenueAsync(range, ct); var occupancy = await OccupancyAsync(range, ct); var bookings = await db.DatPhongs.CountAsync(x => x.NgayDat >= HotelTime.StartOfDayUtc(range.From) && x.NgayDat < HotelTime.StartOfDayUtc(range.To.AddDays(1)), ct);
         var dues = await db.HoaDonPhongs.Where(x => x.TrangThai != "DA_THANH_TOAN" && x.TrangThai != "DA_HUY" && x.TrangThai != "NHAP")
             .Select(x => x.TongTien - (db.ApDungCocHoaDons.Where(d => d.HoaDonPhongId == x.Id).Sum(d => (decimal?)d.SoTienApDung) ?? 0)
                 - (db.ThanhToanHoaDonPhongs.Where(p => p.HoaDonPhongId == x.Id && p.TrangThai == "THANH_CONG").Sum(p => (decimal?)p.SoTien) ?? 0)).ToListAsync(ct);
@@ -26,7 +27,7 @@ public sealed class ReportService(HotelDbContext db) : IReportService
 
     public async Task<RevenueReportResponse> RevenueAsync(ReportRange range, CancellationToken ct)
     {
-        var from = range.From.ToDateTime(TimeOnly.MinValue); var to = range.To.AddDays(1).ToDateTime(TimeOnly.MinValue);
+        var from = HotelTime.StartOfDayUtc(range.From); var to = HotelTime.StartOfDayUtc(range.To.AddDays(1));
         var invoices = await db.HoaDonPhongs.Where(x => x.NgayLap >= from && x.NgayLap < to && x.TrangThai != "DA_HUY" && x.TrangThai != "NHAP").ToListAsync(ct);
         var service = await db.Set<HoaDonDichVu>().Where(x => x.NgayLap >= from && x.NgayLap < to && x.TrangThai != "DA_HUY" && x.TrangThai != "NHAP").SumAsync(x => (decimal?)x.TongTien, ct) ?? 0;
         var room = invoices.Sum(x => x.TienPhong + x.TienPhuThu); var compensation = invoices.Sum(x => x.TienBoiThuong); var vat = invoices.Sum(x => x.TienThue);

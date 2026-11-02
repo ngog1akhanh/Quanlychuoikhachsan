@@ -60,7 +60,7 @@ public sealed class HotelCatalogController(HotelDbContext db, IBookingService bo
     [AllowAnonymous, HttpGet("public/rooms/{id:long}/price")]
     public async Task<IActionResult> Price(long id, DateOnly checkInDate, DateOnly checkOutDate, CancellationToken ct) => Ok(await bookings.PreviewPriceAsync(id, checkInDate, checkOutDate, ct));
     [AllowAnonymous, HttpGet("public/room-types")]
-    public async Task<IActionResult> Types(CancellationToken ct) => Ok(await db.LoaiPhongs.AsNoTracking().Where(x => x.TrangThai == "HOAT_DONG").Select(x => new { x.Id, x.TenLoaiPhong, x.SoNguoiLonToiDa, x.SoTreEmToiDa, x.DienTichM2, x.GiaCoBanDem, x.MoTa }).ToListAsync(ct));
+    public async Task<IActionResult> Types(CancellationToken ct) => Ok(await db.LoaiPhongs.AsNoTracking().Where(x => x.TrangThai == "HOAT_DONG").Select(x => new { x.Id, x.MaLoaiPhong, x.TenLoaiPhong, x.SoNguoiLonToiDa, x.SoTreEmToiDa, x.DienTichM2, x.GiaCoBanDem, x.MoTa }).ToListAsync(ct));
     [HttpPut("rooms/{id:long}"), RequirePermission("ROOM_WRITE")]
     public async Task<IActionResult> Room(long id, RoomUpdateRequest r, CancellationToken ct)
     {

@@ -1,0 +1,67 @@
+<div class="card summary">
+    <h3>Tóm tắt đặt phòng</h3>
+
+    <div class="summary-row"><span>Nhận phòng</span><b>@Fmt.Date(Query.CheckIn) · @HotelInfo.CheckInTime</b></div>
+    <div class="summary-row"><span>Trả phòng</span><b>@Fmt.Date(Query.CheckOut) · @HotelInfo.CheckOutTime</b></div>
+    <div class="summary-row"><span>Số đêm</span><b>@Query.Nights</b></div>
+    <div class="summary-row"><span>Khách</span><b>@Query.Adults người lớn@(Query.Children > 0 ? $", {Query.Children} trẻ em" : "")</b></div>
+
+    <div class="mt-1">
+        @foreach (var r in Rooms)
+        {
+            var id = r.Id;
+            <div class="summary-room">
+                <img src="@RoomImages.Cover(r)" alt="" />
+                <div class="name">
+                    <b>@r.RoomTypeName</b>
+                    <small>Phòng @r.RoomNumber · @Fmt.Money(r.UnitPrice)/đêm</small>
+                </div>
+                @if (ShowRemove)
+                {
+                    <button type="button" class="remove-x" title="Bỏ phòng này" @onclick="() => OnRemove.InvokeAsync(id)">×</button>
+                }
+            </div>
+        }
+        @if (!Rooms.Any())
+        {
+            <p class="muted small">Chưa chọn phòng nào.</p>
+        }
+    </div>
+
+    @if (Booking?.Nights is { Count: > 0 } nights)
+    {
+        <details class="mt-1">
+            <summary class="small muted" style="cursor:pointer">Giá chốt từng đêm</summary>
+            <table class="table">
+                @foreach (var n in nights)
+                {
+                    <tr><td>@Fmt.Date(n.StayDate)</td><td>@Fmt.Money(n.FinalPrice)</td></tr>
+                }
+            </table>
+        </details>
+    }
+
+    <div class="summary-row total"><span>Tổng tiền phòng</span><span>@Fmt.Money(Total)</span></div>
+    @if (ShowDeposit)
+    {
+        <div class="summary-row deposit"><span>Tiền cọc (@((HotelInfo.DepositRate * 100).ToString("0"))%)</span><b>@Fmt.Money(Deposit)</b></div>
+        <div class="summary-row"><span class="muted">Thanh toán khi trả phòng</span><span class="muted">@Fmt.Money(Total - Deposit)</span></div>
+    }
+    <p class="muted small mt-1 mb-0">Giá chính thức từng đêm do hệ thống tính và chốt khi giữ phòng; chưa gồm VAT/phụ thu (nếu có).</p>
+
+    @ChildContent
+</div>
+
+@code {
+    [Parameter] public IEnumerable<PublicRoom> Rooms { get; set; } = Array.Empty<PublicRoom>();
+    [Parameter] public RoomSearchQuery Query { get; set; } = new();
+    /// <summary>Booking đã tạo (có giá chốt) – nếu null thì tạm tính từ danh sách phòng.</summary>
+    [Parameter] public BookingResponse? Booking { get; set; }
+    [Parameter] public bool ShowDeposit { get; set; } = true;
+    [Parameter] public bool ShowRemove { get; set; }
+    [Parameter] public EventCallback<long> OnRemove { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+
+    private decimal Total => Booking?.TotalRoomAmount ?? Rooms.Sum(r => r.UnitPrice) * Query.Nights;
+    private decimal Deposit => Math.Round(Total * HotelInfo.DepositRate, 0);
+}
