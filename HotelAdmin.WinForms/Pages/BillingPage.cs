@@ -9,7 +9,7 @@ using HotelAdmin.Theme;
 namespace HotelAdmin.Pages;
 
 /// <summary>
-/// Module Hóa đơn & thanh toán (mục 12): hóa đơn phòng, hóa đơn dịch vụ, phiếu cọc, phiếu hoàn tiền, ca thu ngân.
+/// Module Hóa đơn & thanh toán (mục 12): hóa đơn phòng, hóa đơn dịch vụ, phiếu cọc, đơn cọc QR, phiếu hoàn tiền, ca thu ngân.
 /// Hóa đơn đã phát hành không sửa; sai thì hủy và lập phiếu hoàn theo đúng khoản đã thu.
 /// </summary>
 public sealed class BillingPage : ModulePage
@@ -22,6 +22,7 @@ public sealed class BillingPage : ModulePage
         AddTab("Hóa đơn phòng", RoomInvoices());
         AddTab("Hóa đơn dịch vụ", ServiceInvoices());
         AddTab("Phiếu cọc", Deposits());
+        AddTab("Đơn cọc QR", DepositOrders());
         AddTab("Phiếu hoàn tiền", Refunds());
         AddTab("Ca thu ngân", Shifts());
         BuildTabs();
@@ -247,6 +248,59 @@ public sealed class BillingPage : ModulePage
                 when: r => J.Dec(r, "refundable") > 0 && J.Str(r, "booking_status") is "DA_HUY" or "DA_TRA");
         return view;
     }
+
+    /// <summary>
+    /// Đơn cọc VietQR do khách tạo trên website. Hệ thống tự kiểm tra mỗi phút (khi dùng VietQR thật);
+    /// nhân viên có thể bấm "Kiểm tra ngay" khi khách báo đã chuyển khoản.
+    /// </summary>
+    private DataView DepositOrders()
+    {
+        var view = new DataView(Session, "Đơn cọc QR (khách đặt trên web)") { Paged = true, Loader = q => Page("v1/app/deposit-orders", q) };
+        view.AddSearch("Mã booking, tên khách, nội dung CK, mã giao dịch…")
+            .AddStatusFilter(null, "PENDING", "PAID", "FAILED", "REFUND_REQUIRED", "REFUNDED")
+            .Columns(
+                Col.Text("Booking", "booking_code", 80),
+                Col.Status("TT booking", "booking_status", 85),
+                Col.Text("Khách", "customer_name", 110),
+                Col.Text("SĐT", "customer_phone", 75),
+                Col.Money("Số tiền", "amount", 75),
+                Col.Text("Nội dung CK", "description", 95),
+                Col.Time("Tạo QR lúc", "created_at", 85),
+                Col.Time("Giữ phòng đến", "hold_expires_at", 85),
+                Col.Time("Nhận tiền lúc", "paid_at", 85),
+                Col.Text("Mã giao dịch", "transaction_id", 90),
+                Col.Status("Trạng thái", "status", 85))
+            .AddAction("Kiểm tra ngay", r => InquireDepositOrderAsync(r!.Value), "BILLING_PAYMENT_WRITE", primary: true,
+                when: r => J.Str(r, "status") is "PENDING" or "FAILED")
+            .AddAction("Giả lập đã thanh toán (demo)", r => SimulateDepositOrderAsync(r!.Value), "BILLING_PAYMENT_WRITE",
+                when: r => J.Str(r, "status") == "PENDING");
+        return view;
+    }
+
+    private async Task<bool> InquireDepositOrderAsync(JsonElement row)
+    {
+        var result = await Api.PostJsonAsync($"v1/deposit-payments/{Uri.EscapeDataString(J.Str(row, "order_id"))}/inquiry");
+        Ui.Info(Owner, DepositOrderMessage(J.Str(result, "status"), J.Str(row, "booking_code")), "Kết quả kiểm tra VietQR");
+        return true;
+    }
+
+    private async Task<bool> SimulateDepositOrderAsync(JsonElement row)
+    {
+        if (!Ui.Confirm(Owner, $"Giả lập ngân hàng báo đã nhận {J.MoneyVnd(J.Dec(row, "amount"))} cho booking {J.Str(row, "booking_code")}?\n\n" +
+                "Chỉ dùng khi demo (API chạy Development, chưa cấu hình VietQR thật). Không có tiền thật được chuyển."))
+            return false;
+        var result = await Api.PostJsonAsync($"v1/deposit-payments/{Uri.EscapeDataString(J.Str(row, "order_id"))}:simulate-paid");
+        Ui.Info(Owner, DepositOrderMessage(J.Str(result, "status"), J.Str(row, "booking_code")), "Giả lập thanh toán");
+        return true;
+    }
+
+    private static string DepositOrderMessage(string status, string bookingCode) => status switch
+    {
+        "PAID" => $"Đã nhận tiền cọc. Booking {bookingCode} đã được xác nhận.",
+        "REFUND_REQUIRED" => "Đã nhận tiền nhưng phòng không còn giữ hoặc số tiền không khớp.\nHệ thống đã lập phiếu hoàn chờ xử lý – xem tab Phiếu hoàn tiền.",
+        "FAILED" => "Mã QR đã hết hạn hoặc bị hủy phía ngân hàng. Khách có thể tạo QR mới nếu phòng còn giữ.",
+        _ => "Chưa nhận được tiền chuyển khoản."
+    };
 
     private DataView Refunds()
     {

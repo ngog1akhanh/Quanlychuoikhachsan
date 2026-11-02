@@ -27,7 +27,8 @@ public sealed record PaymentResultInfo(bool Success, string BookingCode, decimal
 
 /// <summary>
 /// Đơn cọc VietQR của khách: POST /v1/bookings/{id}/deposit-payment và POST /v1/deposit-payments/{orderId}/inquiry.
-/// Status: PENDING | PAID | REFUND_REQUIRED | REFUNDED. Số tiền cọc do server tính.
+/// Status: PENDING | PAID | FAILED | REFUND_REQUIRED | REFUNDED. Số tiền cọc do server tính.
+/// HoldExpiresAt: hạn giữ phòng mới nhất (server nới khi tạo QR). Demo: API đang chạy cổng VietQR giả lập.
 /// </summary>
 public sealed record DepositOrder(
     string OrderId,
@@ -39,4 +40,7 @@ public sealed record DepositOrder(
     string Status,
     string? TransactionId,
     DateTime CreatedAt,
-    DateTime? PaidAt);
+    DateTime? PaidAt,
+    string? BookingCode = null,
+    DateTime? HoldExpiresAt = null,
+    bool Demo = false);

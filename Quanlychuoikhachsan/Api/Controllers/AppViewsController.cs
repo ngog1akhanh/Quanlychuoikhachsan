@@ -121,6 +121,30 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
         }, ct));
     }
 
+    // ---------------- Đơn cọc VietQR (khách tự quét QR trên web) ----------------
+    [HttpGet("deposit-orders"), RequirePermission("BILLING_READ")]
+    public async Task<IActionResult> DepositOrders([FromQuery] ListQuery q, CancellationToken ct)
+    {
+        var s = q.Search?.Trim();
+        var query = db.Set<DepositPaymentOrder>().AsNoTracking().Where(x => q.Status == null || x.Status == q.Status)
+            .Join(db.Set<DatPhong>(), o => o.BookingId, b => b.Id, (o, b) => new { o, b })
+            .Where(x => s == null || x.b.MaDatPhong.Contains(s) || x.b.KhachHang.HoTen.Contains(s) || x.o.OrderId.Contains(s)
+                || x.o.Description.Contains(s) || (x.o.TransactionId != null && x.o.TransactionId.Contains(s)))
+            .OrderByDescending(x => x.o.Id)
+            .Select(x => new
+            {
+                x.o.Id, x.o.OrderId, x.o.BookingId, x.b.MaDatPhong, BookingStatus = x.b.TrangThai, x.b.KhachHang.HoTen, x.b.KhachHang.SoDienThoai,
+                x.o.Amount, x.o.Description, x.o.Status, x.o.TransactionId, x.o.CreatedAt, x.o.PaidAt,
+                HoldExpiresAt = db.Set<KhoaLichPhong>().Where(k => db.Set<ChiTietDatPhong>().Any(d => d.Id == k.ChiTietDatPhongId && d.DatPhongId == x.o.BookingId))
+                    .Max(k => k.HetHanGiuCho)
+            });
+        return Ok(await PageAsync(query, q, x => new
+        {
+            x.Id, x.OrderId, x.BookingId, BookingCode = x.MaDatPhong, x.BookingStatus, CustomerName = x.HoTen, CustomerPhone = x.SoDienThoai,
+            x.Amount, x.Description, x.Status, x.TransactionId, CreatedAt = U(x.CreatedAt), PaidAt = U(x.PaidAt), HoldExpiresAt = U(x.HoldExpiresAt)
+        }, ct));
+    }
+
     // ---------------- Ca thu ngân ----------------
     [HttpGet("shifts"), RequirePermission("BILLING_READ")]
     public async Task<IActionResult> Shifts([FromQuery] ListQuery q, CancellationToken ct)

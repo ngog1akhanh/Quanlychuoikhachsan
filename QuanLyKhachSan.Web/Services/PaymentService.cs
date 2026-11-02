@@ -28,6 +28,10 @@ public sealed class PaymentService
     public Task<DepositOrder> InquireDepositAsync(string orderId)
         => _api.PostAsync<DepositOrder>($"v1/deposit-payments/{Uri.EscapeDataString(orderId)}/inquiry");
 
+    /// <summary>Chỉ chế độ demo (API Development, chưa cấu hình VietQR): giả lập ngân hàng báo đã nhận đủ tiền.</summary>
+    public Task<DepositOrder> SimulateDepositPaidAsync(string orderId)
+        => _api.PostAsync<DepositOrder>($"v1/deposit-payments/{Uri.EscapeDataString(orderId)}:simulate-paid");
+
     /// <summary>
     /// Chỉ dùng ở chế độ mock. Với API thật, route :confirm-deposit dành cho nhân viên thu ngân (BILLING_PAYMENT_WRITE);
     /// khách dùng CreateDepositOrderAsync + InquireDepositAsync.

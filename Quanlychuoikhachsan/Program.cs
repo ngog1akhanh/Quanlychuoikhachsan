@@ -181,8 +181,13 @@ builder.Services.AddHttpClient("vietqr", client => client.Timeout = TimeSpan.Fro
 // Cấu hình gateway VietQR và service nghiệp vụ theo luồng tạo QR/inquiry.
 builder.Services.Configure<Quanlychuoikhachsan.Application.Payments.VietQrSettings>(
     builder.Configuration.GetSection(Quanlychuoikhachsan.Application.Payments.VietQrSettings.SectionName));
-builder.Services.AddScoped<Quanlychuoikhachsan.Application.Payments.IVietQrGateway,
-    Quanlychuoikhachsan.Infrastructure.Payments.VietQrGateway>();
+// Cổng VietQR: thiếu tài khoản sandbox (hoặc VietQR:Mode = Demo) thì dùng cổng giả lập.
+builder.Services.AddScoped<Quanlychuoikhachsan.Infrastructure.Payments.VietQrGateway>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Infrastructure.Payments.DemoVietQrGateway>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Payments.IVietQrGateway>(sp =>
+    sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<Quanlychuoikhachsan.Application.Payments.VietQrSettings>>().Value.IsDemo
+        ? sp.GetRequiredService<Quanlychuoikhachsan.Infrastructure.Payments.DemoVietQrGateway>()
+        : sp.GetRequiredService<Quanlychuoikhachsan.Infrastructure.Payments.VietQrGateway>());
 builder.Services.AddScoped<Quanlychuoikhachsan.Application.Payments.IVietQrPaymentService,
     Quanlychuoikhachsan.Application.Payments.VietQrPaymentService>();
 builder.Services.AddScoped<Quanlychuoikhachsan.Application.Accounts.IAccountService,
@@ -196,6 +201,8 @@ builder.Services.AddScoped<Quanlychuoikhachsan.Application.Housekeeping.IHouseke
     Quanlychuoikhachsan.Application.Housekeeping.HousekeepingService>();
 builder.Services.AddScoped<Quanlychuoikhachsan.Application.Reports.IReportService,
     Quanlychuoikhachsan.Application.Reports.ReportService>();
+builder.Services.AddScoped<Quanlychuoikhachsan.Application.Reports.IInvoiceStatsService,
+    Quanlychuoikhachsan.Application.Reports.InvoiceStatsService>(); // Thống kê hóa đơn theo kỳ / nhân viên / sản phẩm
 
 var app = builder.Build();
 
