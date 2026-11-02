@@ -45,8 +45,10 @@ builder.Services.AddRateLimiter(options =>
         context.Connection.RemoteIpAddress?.ToString() ?? "unknown", _ => new FixedWindowRateLimiterOptions { PermitLimit = 10, Window = TimeSpan.FromMinutes(1), QueueLimit = 0 }));
 });
 builder.Services.AddScoped<AuditSaveChangesInterceptor>();
+builder.Services.AddSingleton<UtcConnectionInterceptor>();
 builder.Services.AddDbContext<HotelDbContext>((serviceProvider, options) =>
-    options.AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>())
+    options.AddInterceptors(serviceProvider.GetRequiredService<AuditSaveChangesInterceptor>(),
+        serviceProvider.GetRequiredService<UtcConnectionInterceptor>())
         .UseMySql(connectionString, ServerVersion.Parse(builder.Configuration["Database:ServerVersion"] ?? "8.0.36-mysql"), mySql =>
     {
         // Các service tự mở transaction Serializable; không bật retry strategy mặc định.

@@ -7,7 +7,8 @@
 - Nhánh tích hợp: `codex/integrate-lmt-api`, tạo từ `lmt`.
 - Bộ API mới được khôi phục từ stash `On master: !!GitHub_Desktop<master>` bằng `stash apply`. Stash vẫn được giữ nguyên.
 - WinForms và các hợp đồng API lễ tân/phòng được lấy từ RAR. Không đưa `bin`, `obj`, `.vs`, bản sao database hoặc cấu hình máy cũ vào mã nguồn tích hợp.
-- Các thay đổi đang ở working tree; chưa commit/push hoặc cập nhật lại RAR. Khi chia sẻ bản mới, dùng solution trong repo, không giải nén RAR cũ đè lên mã nguồn này.
+- Mã tích hợp đã được lưu trên nhánh `codex/integrate-lmt-api` (commit nền `b65ef24`). Khi chia sẻ bản mới, dùng solution trong repo, không giải nén RAR cũ đè lên mã nguồn này.
+- Bộ cài database cho người clone mới nằm tại `Database/Install/hotel_management_compatible.sql` trong project backend; xem [hướng dẫn database](DATABASE_COMPATIBILITY.md).
 
 ## Nguyên tắc hợp nhất
 
@@ -39,7 +40,7 @@ Không nhập lại `FrontDeskEntities` và cấu hình EF của RAR: các entit
 
 ## Quyền và dữ liệu thời gian
 
-Chạy lại `Database/Scripts/seed_api_permissions.sql` trên database đã có đủ schema bổ sung. Script thêm quyền còn thiếu, giữ nguyên các liên kết tài khoản hiện hữu. Script cũng bổ sung quyền tương ứng cho vai trò cũ nếu chúng tồn tại:
+Với database mới, bundle `hotel_management_compatible.sql` đã bao gồm quyền. Với database cũ đã có đủ schema bổ sung, chạy lại `Database/Scripts/seed_api_permissions.sql`. Script thêm quyền còn thiếu, giữ nguyên các liên kết tài khoản hiện hữu. Script cũng bổ sung quyền tương ứng cho vai trò cũ nếu chúng tồn tại:
 
 | Mã LMT | Mã vai trò chuẩn |
 |---|---|
@@ -88,9 +89,9 @@ Các màn hình thực thi đã có từ LMT: tổng quan, phòng, đặt phòng
 ## Kiểm chứng
 
 - Build cả solution: **0 lỗi, 0 cảnh báo**.
-- **51/51 kiểm thử** qua: 38 kiểm thử nền và 13 trường hợp bổ sung.
+- **55/55 kiểm thử** qua: 51 test API/nghiệp vụ và 4 test tích hợp MariaDB thật.
 - HTTP tests gọi trực tiếp `ApiClient` và DTO của WinForms: hồ sơ nhân viên/khách, cọc và thử lại, nhận/trả phòng chỉ một hóa đơn, thanh toán chỉ một lần, công việc dọn phòng không trùng, hủy qua route cũ/duyệt qua route mới, quyền thu tiền, giới hạn khách, trạng thái phòng và ngày lưu trú quanh nửa đêm.
 - OpenAPI: **223 thao tác HTTP / 178 đường dẫn**, không có action trùng. Xem [danh mục](API_ENDPOINTS.md) và [JSON](openapi.json).
-- Kiểm thử dùng EF InMemory và một số kiểm tra sinh SQL/model bằng provider MySQL. **Chưa xác nhận transaction rollback, cạnh tranh đồng thời, FK hoặc script trên MySQL/MariaDB thật; chưa thử ngân hàng, SMTP hay tương tác trực tiếp toàn bộ màn hình WinForms.**
+- Đã kiểm tra import SQL, model, FK/CHECK/unique, rollback, nhập/xuất, booking/VietQR, công nợ và UTC trên MariaDB 11.4.13. Xem [phạm vi kiểm chứng](DATABASE_COMPATIBILITY.md#kiểm-chứng-và-tái-tạo). **Chưa kiểm thử cạnh tranh đồng thời, MySQL riêng, ngân hàng, SMTP hay tương tác trực tiếp toàn bộ màn hình WinForms.**
 
 Sau khi chạy test, sinh lại tài liệu bằng `python scripts/export_api_docs.py`. Khi đổi phân quyền controller, sinh lại SQL bằng `python scripts/generate_api_permissions.py` rồi rà soát trước khi áp dụng vào database.

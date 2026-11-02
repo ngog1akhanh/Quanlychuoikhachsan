@@ -16,14 +16,20 @@ WinForms từ RAR đã được đưa vào solution và kết nối với API m�
 
 ## Chuẩn bị database
 
-Với database mới, chạy theo thứ tự trong database `hotel_management`:
+Người clone repo mới cần chuyển sang nhánh `codex/integrate-lmt-api`, cài MySQL/MariaDB rồi import file SQL bên dưới trước khi chạy API. Bộ cài đã có sẵn trong Git, không cần RAR hoặc thư mục `review` trên máy người khác.
+
+Với database mới, dùng một file [hotel_management_compatible.sql](Quanlychuoikhachsan/Database/Install/hotel_management_compatible.sql): **67 bảng, 5 view, 6 vai trò, 42 quyền**, đã kiểm thử trên MariaDB 11.4.13. Xem [đối chiếu schema và hướng dẫn cài/kết nối](docs/DATABASE_COMPATIBILITY.md).
+
+Bộ cài tạo database riêng `hotel_management_compatible` và dừng nếu tên đã tồn tại khi chạy batch không dùng `--force`. Không chạy thêm các script nguồn sau khi import bundle.
+
+Các script nguồn cũ, giữ để đối chiếu hoặc lập kế hoạch nâng cấp database đang có:
 
 1. `Quanlychuoikhachsan/Database/Scripts/hotel_management_final_food_inventory.sql`.
 2. `Quanlychuoikhachsan/Database/Scripts/add_vietqr_payment_order.sql`.
 3. `Quanlychuoikhachsan/Database/Scripts/add_operational_api_support.sql`.
 4. `Quanlychuoikhachsan/Database/Scripts/seed_api_permissions.sql`.
 
-Với database đã có, chỉ áp dụng các script bổ sung chưa chạy; không chạy lại schema gốc. Script quyền thêm quyền và liên kết vai trò còn thiếu, không tạo tài khoản/mật khẩu mặc định. Các đề xuất DDL trong tài liệu feedback chưa được tự động áp dụng; validation kho được bổ sung ở API.
+Với database đã có, chỉ áp dụng các script bổ sung chưa chạy; không chạy lại schema gốc hoặc bộ cài mới. Script quyền thêm quyền và liên kết vai trò còn thiếu, không tạo tài khoản/mật khẩu mặc định. Các ràng buộc bổ sung của bản cài mới cần được kiểm tra với dữ liệu cũ trước khi lập migration.
 
 Tài khoản quản trị đầu tiên cần có hồ sơ nhân viên đang làm việc và liên kết vai trò `ADMIN` trong database. Dùng mật khẩu băm bởi ASP.NET Core Identity; không nhập mật khẩu dạng rõ vào `mat_khau_hash`. Admin hiện có có thể tạo nhân viên và gán vai trò qua API.
 
@@ -64,6 +70,6 @@ Cấu hình bí mật không được đưa vào Git. ServerVersion được c�
 
 Bộ kiểm thử đang dùng `Quanlychuoikhachsan.Api.Tests` gồm kiểm thử nghiệp vụ, HTTP với JWT thật và đối chiếu model/SQL. Dự án test payOS cũ không thuộc solution hiện tại và không đại diện cho tích hợp VietQR.
 
-Đã kiểm thử bằng EF InMemory và sinh SQL bằng provider MySQL; chưa chạy giao dịch đồng thời, khóa dòng, FK hoặc các script trên MySQL/MariaDB thực tế. Chưa gọi ngân hàng hay SMTP thật. Gateway hiện có dùng VietQR sandbox. API hoàn tiền ghi nhận khoản đã hoàn thực tế, không tự chuyển tiền ngân hàng.
+Đã đạt 55 test, gồm EF InMemory/HTTP và 4 test tích hợp MariaDB 11.4.13 thực tế: import schema, đối chiếu model, luồng nhập/xuất, FK/CHECK/unique, rollback, booking/VietQR, view công nợ và UTC. Test server thật cần biến `HOTEL_TEST_MYSQL`; thiếu biến này thì 4 test tích hợp sẽ bị bỏ qua. Chưa kiểm thử tải đồng thời hoặc MySQL riêng; chưa gọi ngân hàng hay SMTP thật. Gateway hiện có dùng VietQR sandbox. API hoàn tiền ghi nhận khoản đã hoàn thực tế, không tự chuyển tiền ngân hàng.
 
 Ảnh phòng được quản lý bằng URL. Thông báo nghiệp vụ được gửi vào hộp thư trong ứng dụng; chưa có push/SMS/email nghiệp vụ ngoài email đặt lại mật khẩu. WinForms có màn hình tổng quan, phòng, booking và lễ tân; các module khác vẫn là màn hình tạm của LMT, dù API nghiệp vụ đã có.
