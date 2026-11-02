@@ -33,12 +33,50 @@ public sealed class DepositAndMaintenanceTests
         Assert.Equal("BOOKED", b.TrangThai); Assert.Single(await s.Db.PhieuCocs.ToListAsync()); Assert.Equal("BOOKED", (await s.Db.KhoaLichPhongs.SingleAsync()).TrangThai);
     }
     [Fact]
-    public async Task Mismatched_gateway_amount_cannot_confirm_deposit()
+    public async Task Underpaid_deposit_is_recorded_for_refund_without_confirming_booking()
     {
         await using var s = new TestStore(); var b = await Hold(s); var gateway = new Gateway(); var service = Service(s, gateway); var order = await service.CreateAsync(b.Id, default);
         gateway.Result = new("00", "", order.OrderId, 299, "BANK1", "SUCCESS", null, null);
+        await service.InquireAsync(order.OrderId, default);
+        Assert.Equal("REFUND_REQUIRED", order.Status); Assert.Equal("HOLD", b.TrangThai);
+        Assert.Equal(299, (await s.Db.PhieuCocs.SingleAsync()).SoTien); Assert.Equal(299, (await s.Db.Set<PhieuHoanTien>().SingleAsync()).SoTien);
+    }
+    [Fact]
+    public async Task Mismatched_gateway_order_cannot_confirm_deposit()
+    {
+        await using var s = new TestStore(); var b = await Hold(s); var gateway = new Gateway(); var service = Service(s, gateway); var order = await service.CreateAsync(b.Id, default);
+        gateway.Result = new("00", "", "another-order", 300, "BANK1", "SUCCESS", null, null);
         await Assert.ThrowsAsync<ServiceUnavailableException>(() => service.InquireAsync(order.OrderId, default));
         Assert.Empty(await s.Db.PhieuCocs.ToListAsync()); Assert.Equal("HOLD", b.TrangThai);
+    }
+    [Fact]
+    public async Task Creating_qr_extends_hold_and_failed_qr_can_be_renewed()
+    {
+        await using var s = new TestStore(); var b = await Hold(s); var hold = await s.Db.KhoaLichPhongs.SingleAsync();
+        hold.HetHanGiuCho = DateTime.UtcNow.AddMinutes(2); await s.Db.SaveChangesAsync();
+        var gateway = new Gateway(); var service = Service(s, gateway); var order = await service.CreateAsync(b.Id, default);
+        Assert.True(hold.HetHanGiuCho >= DateTime.UtcNow.AddMinutes(9)); Assert.True(order.Description.Length <= 25);
+        Assert.Same(order, await service.CreateAsync(b.Id, default));
+        var firstId = order.OrderId; gateway.Result = new("00", "", firstId, 0, null, "EXPIRED", null, null);
+        await service.InquireAsync(firstId, default); Assert.Equal("FAILED", order.Status);
+        var renewed = await service.CreateAsync(b.Id, default);
+        Assert.Equal("PENDING", renewed.Status); Assert.NotEqual(firstId, renewed.OrderId); Assert.Single(await s.Db.Set<DepositPaymentOrder>().ToListAsync());
+    }
+    [Fact]
+    public async Task Demo_mode_can_simulate_paid_deposit()
+    {
+        await using var s = new TestStore(); var b = await Hold(s); var gateway = new Gateway(); var service = Service(s, gateway); var order = await service.CreateAsync(b.Id, default);
+        await service.SimulatePaidAsync(order.OrderId, default);
+        Assert.Equal("PAID", order.Status); Assert.Equal("BOOKED", b.TrangThai); Assert.StartsWith("DEMO", (await s.Db.PhieuCocs.SingleAsync()).MaGiaoDich);
+        var live = new DepositPaymentService(s.Db, s.Actor, s.Bookings, gateway, Options.Create(new VietQrSettings { Mode = "Live" }), new NotificationWriter(s.Db));
+        await Assert.ThrowsAsync<InvalidArgumentException>(() => live.SimulatePaidAsync(order.OrderId, default));
+    }
+    [Fact]
+    public void Demo_qr_payload_follows_vietqr_format()
+    {
+        var payload = Quanlychuoikhachsan.Infrastructure.Payments.DemoVietQrGateway.BuildPayload("970436", "0123456789", 300000, "COC12 ABCDEF12");
+        Assert.StartsWith("000201010212", payload); Assert.Contains("0010A000000727", payload); Assert.Contains("5406300000", payload);
+        Assert.Contains("62180814COC12 ABCDEF12", payload); Assert.Matches("6304[0-9A-F]{4}$", payload);
     }
     [Fact]
     public async Task Late_payment_records_money_and_refund_without_claiming_an_expired_room()

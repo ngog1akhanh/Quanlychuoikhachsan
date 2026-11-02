@@ -116,4 +116,4 @@ Chưa kiểm thử: thao tác thực tế trên từng màn hình với API đan
 
 - Báo cáo lọc ngày theo mốc 00:00 trong khi dữ liệu lưu UTC: giao dịch 00:00–07:00 giờ VN có thể tính sang ngày trước.
 - Chưa có màn hình Thông báo nội bộ (`/v1/notifications`).
-- Thanh toán QR đặt cọc: giữ nguyên, sẽ bàn hướng phát triển sau.
+- Thanh toán QR đặt cọc: đã hoàn thiện ở đợt 02/11 – xem [THANH_TOAN_QR_COC.md](THANH_TOAN_QR_COC.md).

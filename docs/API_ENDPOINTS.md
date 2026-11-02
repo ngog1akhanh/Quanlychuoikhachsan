@@ -1,6 +1,6 @@
 # Danh mục API
 
-Tổng hiện tại: **240 thao tác HTTP** trên **195 đường dẫn** (bao gồm API có sẵn và API bổ sung).
+Tổng hiện tại: **245 thao tác HTTP** trên **200 đường dẫn** (bao gồm API có sẵn và API bổ sung).
 
 Sinh từ Swagger và metadata phân quyền của HTTP test host. Body/response chi tiết xem [OpenAPI](openapi.json); luồng sử dụng xem [hướng dẫn](API_WORKFLOWS.md).
 
@@ -36,6 +36,7 @@ Cột quyền thể hiện yêu cầu khai báo ở controller. Các API JWT t�
 | GET | `/v1/app/assets` | INVENTORY_READ |
 | GET | `/v1/app/cancellation-policies` | PRICING_WRITE |
 | GET | `/v1/app/customers` | CUSTOMER_READ |
+| GET | `/v1/app/deposit-orders` | BILLING_READ |
 | GET | `/v1/app/deposits` | BILLING_READ |
 | GET | `/v1/app/employees` | HOUSEKEEPING_READ |
 | GET | `/v1/app/housekeeping-tasks` | HOUSEKEEPING_READ |
@@ -138,6 +139,7 @@ Cột quyền thể hiện yêu cầu khai báo ở controller. Các API JWT t�
 | POST | `/v1/bookings/{id}/deposit-payment` | JWT; kiểm tra chủ sở hữu/quyền trong nghiệp vụ |
 | GET | `/v1/deposit-payments` | JWT; kiểm tra chủ sở hữu/quyền trong nghiệp vụ |
 | POST | `/v1/deposit-payments/{orderId}/inquiry` | JWT; kiểm tra chủ sở hữu/quyền trong nghiệp vụ |
+| POST | `/v1/deposit-payments/{orderId}:simulate-paid` | JWT; kiểm tra chủ sở hữu/quyền trong nghiệp vụ |
 
 ## FrontDesk
 
@@ -250,6 +252,14 @@ Cột quyền thể hiện yêu cầu khai báo ở controller. Các API JWT t�
 | GET | `/v1/warehouses` | INVENTORY_READ |
 | POST | `/v1/warehouses` | INVENTORY_WRITE |
 | PUT | `/v1/warehouses/{id}` | INVENTORY_WRITE |
+
+## InvoiceStats
+
+| Method | Endpoint | Quyền truy cập |
+|---|---|---|
+| GET | `/v1/reports/invoice-stats/periods` | REPORT_READ |
+| GET | `/v1/reports/invoice-stats/products` | REPORT_READ |
+| GET | `/v1/reports/invoice-stats/staff` | REPORT_READ |
 
 ## MyAccount
 

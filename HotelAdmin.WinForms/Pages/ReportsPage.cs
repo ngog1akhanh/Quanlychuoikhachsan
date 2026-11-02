@@ -12,7 +12,7 @@ namespace HotelAdmin.Pages;
 /// Module Báo cáo (mục 18): doanh thu, đặt phòng & công suất, dịch vụ, khách hàng, nhập–xuất–tồn, vận hành trong ngày.
 /// Chọn khoảng ngày trên thanh công cụ rồi bấm "Xem"; "Xuất CSV" lưu các bảng của tab đang mở (mở được bằng Excel).
 /// </summary>
-public sealed class ReportsPage : ModulePage
+public sealed partial class ReportsPage : ModulePage
 {
     private readonly DateTimePicker fromDate = Inputs.Date(new DateTime(DateTime.Today.Year, DateTime.Today.Month, 1));
     private readonly DateTimePicker toDate = Inputs.Date(DateTime.Today);
@@ -31,6 +31,9 @@ public sealed class ReportsPage : ModulePage
         foreach (Control c in Toolbar.Controls) c.Margin = new Padding(0, c is Label ? 12 : 4, 8, 0);
 
         AddTab("Doanh thu", Revenue());
+        AddTab("HĐ theo thời gian", InvoicesByPeriod());   // Thống kê hóa đơn: ReportsPage.InvoiceStats.cs
+        AddTab("HĐ theo nhân viên", InvoicesByStaff());
+        AddTab("Sản phẩm theo năm", ProductsByYear());
         AddTab("Đặt phòng & công suất", Bookings());
         AddTab("Dịch vụ", Services());
         AddTab("Khách hàng", Customers());
@@ -274,11 +277,11 @@ public sealed class ReportsPage : ModulePage
         using var save = new SaveFileDialog
         {
             Filter = "CSV (*.csv)|*.csv",
-            FileName = $"bao-cao-{From:yyyyMMdd}-{To:yyyyMMdd}.csv"
+            FileName = view.ExportTitle is null ? $"bao-cao-{From:yyyyMMdd}-{To:yyyyMMdd}.csv" : $"thong-ke-hoa-don-{DateTime.Now:yyyyMMdd-HHmm}.csv"
         };
         if (save.ShowDialog(FindForm()) != DialogResult.OK) return;
         var sb = new StringBuilder();
-        sb.AppendLine($"Báo cáo từ {From:dd/MM/yyyy} đến {To:dd/MM/yyyy}");
+        sb.AppendLine(view.ExportTitle ?? $"Báo cáo từ {From:dd/MM/yyyy} đến {To:dd/MM/yyyy}");
         foreach (var (title, grid) in view.Grids)
         {
             sb.AppendLine().AppendLine(Csv(title));
@@ -313,6 +316,9 @@ public sealed class ReportView : UserControl, IReloadable
     }
 
     public Func<Task>? Loader { get; set; }
+
+    /// <summary>Dòng tiêu đề khi xuất CSV; null = dùng khoảng ngày trên thanh công cụ.</summary>
+    public string? ExportTitle { get; set; }
 
     public List<(string Title, ModernGrid Grid)> Grids { get; } = [];
 

@@ -46,6 +46,8 @@ Nếu cần demo, chọn database vừa tạo rồi chạy `Quanlychuoikhachsan/
 
 Tài khoản demo nằm trong `tai khoan test demo.txt`, mật khẩu chung `12345`.
 
+Tùy chọn tiếp theo: `seed_thong_ke.sql` thêm hóa đơn lịch sử 2024–03/2026 vào database demo đang chọn để xem các tab thống kê. `fix_ngay_lap_hoa_don.sql` dành cho dữ liệu cũ sau đối chiếu/sao lưu, không chạy cùng bộ cài mới.
+
 **Database đã có dữ liệu:** không import bundle hoặc seed demo đè lên. Cần migration và đối chiếu dữ liệu riêng. Seed demo đã được kiểm tra chạy lặp trong cùng ngày trên database thử; không dùng để cập nhật database đang vận hành hay chạy lại vào ngày khác.
 
 ---
@@ -60,8 +62,9 @@ Tài khoản demo nằm trong `tai khoan test demo.txt`, mật khẩu chung `123
 | `Jwt:SigningKey` | ✔ | Khóa ký token, tối thiểu 32 ký tự |
 | `Jwt:Issuer`, `Jwt:Audience` | ✔ | Tên phát hành / đối tượng của token |
 | `Database:ServerVersion` | | Mặc định `8.0.36-mysql`; MariaDB thì ghi đúng phiên bản, vd. `10.4.32-mariadb` |
-| `VietQR:Username`, `VietQR:Password` | | Tài khoản VietQR sandbox (cần cho thanh toán QR) |
+| `VietQR:Username`, `VietQR:Password` | | Tài khoản VietQR sandbox. Để trống → thanh toán QR chạy **chế độ demo** |
 | `VietQR:BankAccount`, `VietQR:BankCode`, `VietQR:UserBankName` | | Tài khoản nhận tiền |
+| `VietQR:Mode` | | `Auto` (mặc định) / `Demo` / `Live` – xem [THANH_TOAN_QR_COC.md](THANH_TOAN_QR_COC.md) |
 | `Smtp:Host`, `Smtp:Port`, `Smtp:From`, `Smtp:Username`, `Smtp:Password` | | Gửi mã đặt lại mật khẩu (port mặc định 587) |
 | `BookingMaintenance:Enabled` | | Mặc định `true`: mỗi phút hủy booking giữ chỗ hết hạn và gửi nhắc lịch |
 
@@ -100,7 +103,8 @@ dotnet run --project Quanlychuoikhachsan --launch-profile http
 
 | Nghiệp vụ | Quy tắc |
 |---|---|
-| Giữ phòng | Booking chưa đủ cọc ở trạng thái `HOLD` trong **15 phút**, quá hạn tự hủy |
+| Giữ phòng | Booking chưa đủ cọc ở trạng thái `HOLD` trong **15 phút**, quá hạn tự hủy. Khách tạo QR cọc thì giữ thêm để còn ít nhất **10 phút** |
+| Cọc QR | Đủ tiền + phòng còn giữ → `BOOKED`. Thiếu tiền hoặc hết giữ phòng → phiếu hoàn chờ xử lý. Chi tiết: [THANH_TOAN_QR_COC.md](THANH_TOAN_QR_COC.md) |
 | Nhận phòng | Chỉ khi đã đến ngày lưu trú và mọi phòng ở trạng thái Sẵn sàng |
 | Trả phòng | 3 bước: **chốt hóa đơn → thu tiền → trả phòng**. API từ chối trả phòng khi hóa đơn chưa phát hành hoặc còn nợ |
 | Hóa đơn | Đã phát hành thì không sửa; sai thì hủy và lập lại. Gửi lại cùng `transaction_id` không bị thu hai lần |
@@ -155,7 +159,7 @@ Danh sách đầy đủ quyền của từng API: `API_ENDPOINTS.md`.
 
 ## 9. Giới hạn hiện tại
 
-- Đã chạy 60 test gồm EF InMemory và MariaDB 11.4.13, cả hai yêu cầu đặt cùng phòng đồng thời. Chưa kiểm thử tải nhiều người dùng, deadlock diện rộng hoặc chạy riêng trên MySQL.
+- Đã chạy 66 test gồm EF InMemory và MariaDB 11.4.13, cả hai yêu cầu đặt cùng phòng đồng thời. Chưa kiểm thử tải nhiều người dùng, deadlock diện rộng hoặc chạy riêng trên MySQL.
 - Kiểm thử VietQR thay gateway bên ngoài bằng fake; chưa gọi ngân hàng hay SMTP thật.
 - Phiếu hoàn tiền chỉ ghi nhận việc đã hoàn, không ra lệnh chuyển tiền.
 - Ảnh phòng lưu bằng đường dẫn URL, chưa có chức năng tải ảnh lên.
@@ -172,3 +176,4 @@ Danh sách đầy đủ quyền của từng API: `API_ENDPOINTS.md`.
 | [API_FUNCTIONAL_COVERAGE.md](API_FUNCTIONAL_COVERAGE.md) | Đối chiếu chức năng trong tài liệu đồ án với API |
 | [openapi.json](openapi.json) | Import vào Postman |
 | [update_11_1.md](update_11_1.md) | Cập nhật 01/11: 8 module App quản lý, API `/v1/app` |
+| [THANH_TOAN_QR_COC.md](THANH_TOAN_QR_COC.md) | Thanh toán cọc bằng QR: luồng, chế độ demo, cấu hình, cách demo |

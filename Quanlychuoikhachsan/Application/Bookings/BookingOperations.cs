@@ -43,6 +43,10 @@ public sealed partial class BookingService
         var invoice = await CreateInvoiceAsync(booking, employee, automatic + request.EarlyOrLateSurcharge, request.VatRate, ct);
         var response = await InvoiceResponseAsync(invoice, ct);
         invoice.TrangThai = response.Due == 0 ? "DA_THANH_TOAN" : response.DepositApplied > 0 ? "TT_MOT_PHAN" : "DA_PHAT_HANH";
+        // Hóa đơn tạm được tạo lúc nhận phòng; khi chốt (phát hành) thì ngày lập = lúc chốt, người lập = người chốt.
+        // Báo cáo doanh thu nhóm theo ngay_lap nên nếu giữ ngày nhận phòng, doanh thu sẽ rơi về quá khứ.
+        invoice.NgayLap = DateTime.UtcNow;
+        invoice.NhanVienLapId = employee;
         await dbContext.SaveChangesAsync(ct); await tx.CommitAsync(ct); return await InvoiceResponseAsync(invoice, ct);
     }
     private async Task<decimal> SurchargeAsync(DatPhong booking, CancellationToken ct)

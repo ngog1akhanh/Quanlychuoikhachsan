@@ -72,10 +72,10 @@ Repo chia sẻ schema, seed danh mục/quyền, seed demo tùy chọn và công 
 
 ## Kiểm chứng và tái tạo
 
-Ngày kiểm chứng cập nhật: 2026-11-03. **60/60 test đạt**, không bỏ qua test nào trong lần chạy có MariaDB:
+Ngày kiểm chứng cập nhật: 2026-11-03. **66/66 test đạt**, không bỏ qua test nào trong lần chạy có MariaDB:
 
-- 53 test API/nghiệp vụ, gồm hồi quy giữ trạng thái phòng đang ở và biên ngày Việt Nam trong báo cáo.
-- 7 test MariaDB: 4 test schema/nghiệp vụ từ lần trước và 3 test mới về seed/API app/phân quyền, client web/đặt phòng/cọc/hủy, hai yêu cầu đặt cùng phòng đồng thời.
+- 57 test API/nghiệp vụ, gồm hồi quy giữ trạng thái phòng đang ở và biên ngày Việt Nam trong báo cáo.
+- 9 test MariaDB: 4 test schema/nghiệp vụ từ lần trước và 5 test mới về seed/API app/phân quyền, client web/đặt phòng/cọc/hủy, hai yêu cầu đặt cùng phòng đồng thời, seed thống kê/báo cáo và QR demo/quyền/môi trường Production.
 - Cài toàn bộ bundle; đối chiếu model với tên cột, nullability, kiểu dữ liệu, precision/scale, độ dài khai báo và PK; chạy các query EF và 5 view; kiểm tra quyền ADMIN.
 - Luồng service nhập 1.125 đơn vị, xác nhận, từ chối xác nhận lặp, xuất 0.125 và đối chiếu tồn 1.000; kiểm tra FK sai kho/lô, CHECK số lượng âm và rollback.
 - Chặn hai booking cùng phòng/ngày, trùng đơn cọc cùng booking và trùng transaction VietQR; đối chiếu công nợ loại hóa đơn nháp/hủy.
@@ -88,8 +88,10 @@ dotnet test Quanlychuoikhachsan.Api.Tests/Quanlychuoikhachsan.Api.Tests.csproj -
 python scripts/build_database.py --check
 ```
 
-Mỗi test tạo database `hotel_compat_test_<GUID>` rồi chỉ xóa database do test đó tạo. Nếu không đặt biến môi trường, 7 test tích hợp sẽ báo **Skipped**, không được coi là đã kiểm chứng server thật.
+Mỗi test tạo database `hotel_compat_test_<GUID>` rồi chỉ xóa database do test đó tạo. Nếu không đặt biến môi trường, 9 test tích hợp sẽ báo **Skipped**, không được coi là đã kiểm chứng server thật.
 
 File bundle được sinh từ 4 script trong `Database/Scripts` cộng `Database/Install/compatible_constraints.sql`. Chạy `python scripts/build_database.py` sau khi sửa các nguồn. Các script gốc được giữ để đối chiếu; không chạy lại 4 script đó sau khi đã import bundle.
+
+`seed_thong_ke.sql` chạy tùy chọn sau `seed_demo.sql`, dùng database đã chọn và session UTC. Đã chạy lặp và đối chiếu báo cáo trên MariaDB. Hai seed demo không nằm trong bundle. `fix_ngay_lap_hoa_don.sql` chỉ suy ra ngày phát hành từ ngày thu tiền/trả phòng, nên không tự áp dụng cho database cũ hoặc khi cài mới.
 
 Chưa kiểm thử tải đồng thời, deadlock khi nhiều người thao tác, hay kết nối ngân hàng/SMTP thật. Chưa di chuyển dữ liệu database cũ. Nếu nâng cấp database đang có dữ liệu, cần migration riêng, đối chiếu giá trị sai FK/CHECK và quy ước thời gian cũ trước; không dùng bản cài mới để ghi đè.

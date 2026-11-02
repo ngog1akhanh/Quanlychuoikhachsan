@@ -1,6 +1,7 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
 using Quanlychuoikhachsan.Application.Common;
+using Quanlychuoikhachsan.Application.Payments;
 using Quanlychuoikhachsan.Domain.Entities;
 using Quanlychuoikhachsan.Infrastructure.Persistence;
 
@@ -74,9 +75,32 @@ public sealed class BookingMaintenanceWorker(IServiceScopeFactory scopes, IConfi
         using var timer = new PeriodicTimer(TimeSpan.FromMinutes(1));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
+            // Kiểm tra đơn cọc VietQR trước, để tiền đã chuyển kịp xác nhận trước khi booking bị hủy vì hết giữ chỗ.
+            try { await CheckDepositPaymentsAsync(stoppingToken); }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
+            catch (Exception exception) { logger.LogError(exception, "VietQR deposit check failed."); }
             try { await using var scope = scopes.CreateAsyncScope(); await scope.ServiceProvider.GetRequiredService<BookingMaintenance>().RunAsync(stoppingToken); }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested) { break; }
             catch (Exception exception) { logger.LogError(exception, "Booking expiration/reminder maintenance failed."); }
+        }
+    }
+
+    // Tra cứu VietQR cho tối đa 20 đơn cọc đang chờ (tạo trong 24 giờ). Mỗi đơn một scope riêng để lỗi của đơn này
+    // không làm hỏng dữ liệu đang theo dõi của đơn khác. Chế độ demo không có đơn nào được trả về.
+    private async Task CheckDepositPaymentsAsync(CancellationToken ct)
+    {
+        List<long> ids;
+        await using (var scope = scopes.CreateAsyncScope())
+            ids = await scope.ServiceProvider.GetRequiredService<DepositPaymentService>().PendingOrderIdsAsync(20, ct);
+        foreach (var id in ids)
+        {
+            try
+            {
+                await using var scope = scopes.CreateAsyncScope();
+                await scope.ServiceProvider.GetRequiredService<DepositPaymentService>().CheckByIdAsync(id, ct);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception exception) { logger.LogWarning(exception, "Could not check VietQR deposit order {Id}.", id); }
         }
     }
 }

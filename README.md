@@ -14,6 +14,7 @@ Nhánh `codex/integrate-lmt-api` tích hợp website của Trung, WinForms/API m
 1. Cài MySQL >= 8.0.16 hoặc MariaDB >= 10.4.
 2. Import **một file** [hotel_management_compatible.sql](Quanlychuoikhachsan/Database/Install/hotel_management_compatible.sql): 67 bảng, 5 view, 6 vai trò, 42 quyền. Không chạy lại các script nguồn sau bundle.
 3. Nếu cần dữ liệu/tài khoản demo, chạy riêng `Database/Scripts/seed_demo.sql` với database đã chọn. Seed không tự đổi database; chỉ dùng cho demo. Các tài khoản trong [danh sách demo](<tai khoan test demo.txt>) chỉ có sau bước này.
+4. Tùy chọn sau seed demo: chạy `Database/Scripts/seed_thong_ke.sql` trên cùng database để có hóa đơn lịch sử cho báo cáo theo kỳ/nhân viên/sản phẩm. Không cần chạy `fix_ngay_lap_hoa_don.sql` khi cài mới; đó là script hiệu chỉnh dữ liệu cũ cần đối chiếu riêng.
 
 Ví dụ PowerShell 7 tại thư mục repo (có thể thay `mysql` bằng `mariadb`):
 
@@ -41,6 +42,7 @@ Cấu hình backend bằng User Secrets hoặc biến môi trường (`__` thay 
 | `Jwt:SigningKey` | Khóa riêng tối thiểu 32 ký tự |
 | `Jwt:Issuer`, `Jwt:Audience` | Issuer/audience xác thực |
 | `VietQR:Username`, `VietQR:Password`, `VietQR:BankAccount`, `VietQR:BankCode`, `VietQR:UserBankName` | Cấu hình gateway khi cần thử thanh toán |
+| `VietQR:Mode` | `Auto` mặc định: thiếu cấu hình thì demo; `Demo` giả lập; `Live` gọi gateway sandbox |
 | `Smtp:Host`, `Smtp:Port`, `Smtp:From`, `Smtp:Username`, `Smtp:Password` | Email khôi phục mật khẩu khi cần |
 
 ```powershell
@@ -78,3 +80,5 @@ python scripts/build_database.py --check
 - [Danh mục endpoint](docs/API_ENDPOINTS.md) và [OpenAPI](docs/openapi.json).
 
 Gateway VietQR dùng cấu hình sandbox; kiểm thử local không chứng minh giao dịch ngân hàng thật. Hoàn tiền hiện ghi nhận khoản đã hoàn, không tự chuyển tiền. Import schema không tự tạo admin; seed demo cung cấp tài khoản thử, còn môi trường thật cần cấp tài khoản nhân viên và vai trò ADMIN riêng.
+
+Nút giả lập cọc chỉ hoạt động khi API ở `Development` và gateway ở chế độ demo. Xem [hướng dẫn QR](docs/THANH_TOAN_QR_COC.md). Lần tích hợp 03/11/2026: 66 test đạt (9 test MariaDB thật); WinForms tải 12 trang/43 tab, web hoàn tất luồng QR demo. Phạm vi và giới hạn nằm trong báo cáo tích hợp.

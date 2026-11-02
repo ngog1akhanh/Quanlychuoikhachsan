@@ -62,7 +62,7 @@ public sealed partial class MySqlDatabaseTests
         using var client = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost/") });
         var appRoutes = new[] { "invoices", "service-invoices", "deposits", "refunds", "shifts", "housekeeping-tasks",
             "room-conditions", "employees", "service-requests", "active-stays", "customers", "reviews", "staff",
-            "cancellation-policies", "inventory-items", "assets", "rooms" };
+            "cancellation-policies", "inventory-items", "assets", "rooms", "deposit-orders" };
         foreach (var route in appRoutes)
             Assert.Equal(HttpStatusCode.Unauthorized, (await client.GetAsync("v1/app/" + route)).StatusCode);
 
@@ -89,7 +89,7 @@ public sealed partial class MySqlDatabaseTests
         await LoginAsync(client, "kho@hotel.com");
         await ExpectJsonAsync(client, "v1/app/inventory-items");
         Assert.Equal(HttpStatusCode.Forbidden, (await client.GetAsync("v1/app/staff")).StatusCode);
-        output.WriteLine($"Seed repeated: {bookings} bookings, {invoices} invoices. Verified 17 app routes, filtering, and guest/customer/warehouse permissions.");
+        output.WriteLine($"Seed repeated: {bookings} bookings, {invoices} invoices. Verified 18 app routes, filtering, and guest/customer/warehouse permissions.");
     }
 
     private static async Task LoginAsync(HttpClient client, string identifier)
@@ -110,19 +110,21 @@ public sealed partial class MySqlDatabaseTests
         return JsonSerializer.Deserialize<JsonElement>(body);
     }
 
-    private sealed class RealDatabaseApiFactory(string connectionString) : WebApplicationFactory<HotelDbContext>
+    private sealed class RealDatabaseApiFactory(string connectionString, bool fakeGateway = true,
+        string environment = "Development", string paymentMode = "Live") : WebApplicationFactory<HotelDbContext>
     {
         protected override void ConfigureWebHost(IWebHostBuilder builder)
         {
-            builder.UseEnvironment("Development");
+            builder.UseEnvironment(environment);
             builder.UseSetting("ConnectionStrings:HotelManagement", connectionString);
             builder.UseSetting("Database:ServerVersion", "11.4.13-mariadb");
             builder.UseSetting("Jwt:SigningKey", ApiFactory.Key);
             builder.UseSetting("Jwt:Issuer", "test");
             builder.UseSetting("Jwt:Audience", "test");
             builder.UseSetting("BookingMaintenance:Enabled", "false");
+            builder.UseSetting("VietQR:Mode", paymentMode);
             // Gateway giả duy nhất ở biên ngân hàng; auth, HTTP và DB đều chạy thật.
-            builder.ConfigureServices(services =>
+            if (fakeGateway) builder.ConfigureServices(services =>
             {
                 services.RemoveAll<IVietQrGateway>();
                 services.AddSingleton<IVietQrGateway, TestPaymentGateway>();

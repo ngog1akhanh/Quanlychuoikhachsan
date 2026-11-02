@@ -1154,6 +1154,69 @@
         ]
       }
     },
+    "/v1/app/deposit-orders": {
+      "get": {
+        "tags": [
+          "AppViews"
+        ],
+        "parameters": [
+          {
+            "name": "Page",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "PageSize",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Status",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "Offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "Size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "x-required-permissions": [
+          "BILLING_READ"
+        ]
+      }
+    },
     "/v1/app/shifts": {
       "get": {
         "tags": [
@@ -3978,6 +4041,29 @@
       }
     },
     "/v1/deposit-payments/{orderId}/inquiry": {
+      "post": {
+        "tags": [
+          "DepositPayments"
+        ],
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "x-required-permissions": []
+      }
+    },
+    "/v1/deposit-payments/{orderId}:simulate-paid": {
       "post": {
         "tags": [
           "DepositPayments"
@@ -7985,6 +8071,121 @@
         },
         "x-required-permissions": [
           "INVENTORY_READ"
+        ]
+      }
+    },
+    "/v1/reports/invoice-stats/periods": {
+      "get": {
+        "tags": [
+          "InvoiceStats"
+        ],
+        "parameters": [
+          {
+            "name": "fromYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "toYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "month"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "x-required-permissions": [
+          "REPORT_READ"
+        ]
+      }
+    },
+    "/v1/reports/invoice-stats/staff": {
+      "get": {
+        "tags": [
+          "InvoiceStats"
+        ],
+        "parameters": [
+          {
+            "name": "fromYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "toYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "groupBy",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "default": "quarter"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "x-required-permissions": [
+          "REPORT_READ"
+        ]
+      }
+    },
+    "/v1/reports/invoice-stats/products": {
+      "get": {
+        "tags": [
+          "InvoiceStats"
+        ],
+        "parameters": [
+          {
+            "name": "fromYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "toYear",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          }
+        },
+        "x-required-permissions": [
+          "REPORT_READ"
         ]
       }
     },
@@ -14994,6 +15195,9 @@
     },
     {
       "name": "InventoryManagement"
+    },
+    {
+      "name": "InvoiceStats"
     },
     {
       "name": "MyAccount"

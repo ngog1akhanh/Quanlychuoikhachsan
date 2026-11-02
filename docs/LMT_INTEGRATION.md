@@ -3,7 +3,7 @@
 ## Nguồn và nhánh làm việc
 
 - Nhánh nhận: `codex/integrate-lmt-api`, nền trước merge `78887f5` (đã có bộ SQL tương thích).
-- Nguồn merge: `origin/lmt` tại `db1d4c1`, gồm module LMT ở `3fad2eb` và website từ Trung ở `ec459d5`.
+- Nguồn merge: `origin/lmt` tại `ad78332` (QR demo và báo cáo hóa đơn), bao gồm `db1d4c1`, gồm module LMT ở `3fad2eb` và website từ Trung ở `ec459d5`.
 - Giữ nguyên nhánh `lmt`; chỉ commit/push nhánh tích hợp. Lịch sử hai nhánh được giữ bằng merge commit.
 - Dùng source trong `HeThongQuanLyKhachSan.sln`; RAR cũ và project thử payOS không còn dùng đã được LMT bỏ. Không giải nén RAR đè lên source hiện tại.
 - Bốn project backend, web, WinForms và tests thống nhất .NET 10. EF Core/Pomelo vẫn dùng 9 để giữ tương thích database.
@@ -74,7 +74,7 @@ dotnet run --project HotelAdmin.WinForms
 dotnet run --project QuanLyKhachSan.Web --launch-profile http
 ```
 
-LMT đã bổ sung 8 module WinForms: hóa đơn, buồng phòng, dịch vụ, khách hàng, báo cáo, giá/chính sách, nhân viên/phân quyền, kho/tài sản. Cùng 4 trang cũ, tổng cộng 12 trang thực thi. Controller `AppViews` bổ sung 17 API GET `/v1/app/...` ghép tên hiển thị, dùng cùng database và hệ thống quyền; thao tác ghi vẫn gọi các service nghiệp vụ hiện hữu.
+LMT đã bổ sung 8 module WinForms: hóa đơn, buồng phòng, dịch vụ, khách hàng, báo cáo, giá/chính sách, nhân viên/phân quyền, kho/tài sản. Cùng 4 trang cũ, tổng cộng 12 trang thực thi. Controller `AppViews` bổ sung 18 API GET `/v1/app/...` ghép tên hiển thị, dùng cùng database và hệ thống quyền; thao tác ghi vẫn gọi các service nghiệp vụ hiện hữu.
 
 Website Blazor dùng API thật khi `Api:UseMockData=false`. Trang chủ lấy loại phòng và giá cơ bản từ database; link chọn loại phòng truyền đúng query `type`. Giá cuối cùng theo ngày lưu trú được lấy khi tìm và đặt phòng.
 
@@ -97,14 +97,17 @@ Website Blazor dùng API thật khi `Api:UseMockData=false`. Trang chủ lấy l
 ## Kiểm chứng
 
 - Build cả solution: **0 lỗi, 0 cảnh báo**.
-- **60/60 kiểm thử** qua, 0 bỏ qua: 53 test nghiệp vụ/HTTP và 7 test tích hợp MariaDB thật. TRX sinh trong `review/test-results/` khi dùng logger TRX; không commit dữ liệu QA.
+- **66/66 kiểm thử** qua, 0 bỏ qua: 57 test nghiệp vụ/HTTP và 9 test tích hợp MariaDB thật. TRX sinh trong `review/test-results/` khi dùng logger TRX; không commit dữ liệu QA.
 - HTTP tests gọi trực tiếp `ApiClient` và DTO của WinForms: hồ sơ nhân viên/khách, cọc và thử lại, nhận/trả phòng chỉ một hóa đơn, thanh toán chỉ một lần, công việc dọn phòng không trùng, hủy qua route cũ/duyệt qua route mới, quyền thu tiền, giới hạn khách, trạng thái phòng và ngày lưu trú quanh nửa đêm.
-- OpenAPI: **240 thao tác HTTP / 195 đường dẫn**, không có action trùng. Xem [danh mục](API_ENDPOINTS.md) và [JSON](openapi.json).
-- MariaDB 11.4.13: import bundle, model, FK/CHECK/unique, rollback, nhập/xuất, công nợ, UTC; chạy seed demo hai lần cùng ngày không tăng số booking/hóa đơn. Toàn bộ 17 route app trả đúng quyền: chưa đăng nhập 401, khách 403, admin 200; nhân viên kho không đọc được danh sách nhân viên.
+- OpenAPI: **245 thao tác HTTP / 200 đường dẫn**, không có action trùng. Xem [danh mục](API_ENDPOINTS.md) và [JSON](openapi.json).
+- MariaDB 11.4.13: import bundle, model, FK/CHECK/unique, rollback, nhập/xuất, công nợ, UTC; chạy seed demo hai lần cùng ngày không tăng số booking/hóa đơn. Toàn bộ 18 route app trả đúng quyền: chưa đăng nhập 401, khách 403, admin 200; nhân viên kho không đọc được danh sách nhân viên.
 - Hai HTTP request đặt cùng phòng/ngày đồng thời: một 201, một 409, đúng hai khóa cho hai đêm.
 - Client web thật gọi API test host/database thật: đăng nhập, danh mục/giá trang chủ, tìm phòng, tạo HOLD, lịch sử, sửa ghi chú, tạo cọc, inquiry PAID lặp không thu hai lần, BOOKED và gửi yêu cầu hủy. Chỉ gateway ngân hàng được thay bằng fake.
-- WinForms smoke với API/DB chạy thật: **12 trang, 39 tab; 79 request trên 50 đường dẫn API**, không lỗi HTTP. Đã xem ảnh render màn hình kho/báo cáo. Công cụ tải trang/tab, không bấm mọi nút CRUD.
+- WinForms smoke với API/DB chạy thật: **12 trang, 43 tab; 90 request trên 54 đường dẫn API**, không lỗi HTTP. Đã xem ảnh render màn hình kho/báo cáo. Công cụ tải trang/tab, không bấm mọi nút CRUD.
 - Trình duyệt: đăng nhập tài khoản khách demo, tìm phòng; kiểm tra danh mục/giá thật trên trang chủ và lọc Suite từ link trang chủ.
+- Bản `ad78332`: thống kê hóa đơn theo kỳ/nhân viên/sản phẩm, tab đơn cọc QR, vẽ QR trên web, gia hạn giữ phòng khi tạo QR và xử lý tiền cọc thiếu/hết hạn. Hóa đơn được gán thời điểm và người phát hành khi chốt.
+- Seed thống kê lịch sử chạy lặp không tăng số booking/hóa đơn; báo cáo kỳ và nhân viên khớp tổng tiền, doanh thu dịch vụ khớp tổng dòng dịch vụ. Khách hàng bị chặn cả ba API báo cáo.
+- QR demo dùng chính `DemoVietQrGateway`: tạo QR/inquiry PENDING/xác nhận PAID hai lần chỉ một phiếu cọc; chặn khách khác, Live và Production. Trên trình duyệt đã tạo booking QA, hiển thị ảnh QR, giả lập cọc và xem chi tiết booking ở trạng thái Đã xác nhận.
 
 Chạy lại kiểm tra màn hình trên database demo (API đang chạy):
 

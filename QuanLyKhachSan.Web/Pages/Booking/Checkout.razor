@@ -5,6 +5,7 @@
 @inject BookingService BookingSvc
 @inject PaymentService PaymentSvc
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Đặt phòng – @HotelInfo.Name</PageTitle>
 
@@ -86,29 +87,50 @@
                                 }
                                 else
                                 {
-                                    <div class="text-center">
-                                        @if (!string.IsNullOrEmpty(_order.QrDataUrl))
-                                        {
-                                            <img src="@_order.QrDataUrl" alt="Mã QR VietQR" style="max-width:260px;width:100%" />
-                                        }
-                                        else
-                                        {
-                                            <code style="word-break:break-all">@_order.QrCode</code>
-                                        }
-                                        <p class="mt-1 mb-0">Số tiền cọc: <b>@Fmt.Money(_order.Amount)</b></p>
-                                        <p class="mb-0">Nội dung chuyển khoản: <b>@_order.Description</b></p>
-                                        <p class="muted small">Quét mã bằng ứng dụng ngân hàng. Hệ thống tự kiểm tra mỗi 5 giây.</p>
-                                    </div>
-
-                                    if (!string.IsNullOrEmpty(_error))
+                                    if (_order.Status == "FAILED")
                                     {
-                                        <div class="alert alert-warn">@_error</div>
+                                        <div class="alert alert-warn">Mã QR đã hết hạn hoặc bị hủy. Phòng vẫn đang được giữ, bạn có thể tạo mã QR mới.</div>
+                                        <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_busy" @onclick="CreateQrAsync">
+                                            @if (_busy) { <span class="spinner sm"></span> }
+                                            Tạo mã QR mới
+                                        </button>
                                     }
+                                    else
+                                    {
+                                        <div class="text-center">
+                                            @if (!string.IsNullOrEmpty(_qrImage))
+                                            {
+                                                <img src="@_qrImage" alt="Mã QR VietQR" style="max-width:260px;width:100%" />
+                                            }
+                                            else
+                                            {
+                                                <code style="word-break:break-all">@_order.QrCode</code>
+                                            }
+                                            <p class="mt-1 mb-0">Số tiền cọc: <b>@Fmt.Money(_order.Amount)</b></p>
+                                            <p class="mb-0">Nội dung chuyển khoản: <b>@_order.Description</b></p>
+                                            <p class="muted small">Quét mã bằng ứng dụng ngân hàng. Hệ thống tự kiểm tra mỗi 5 giây; nếu bạn đóng trang, khách sạn vẫn tự xác nhận khi nhận được tiền.</p>
+                                        </div>
 
-                                    <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_checking" @onclick="() => CheckPaidAsync(false)">
-                                        @if (_checking) { <span class="spinner sm"></span> }
-                                        Tôi đã chuyển khoản – kiểm tra ngay
-                                    </button>
+                                        if (!string.IsNullOrEmpty(_error))
+                                        {
+                                            <div class="alert alert-warn">@_error</div>
+                                        }
+
+                                        <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_checking" @onclick="() => CheckPaidAsync(false)">
+                                            @if (_checking) { <span class="spinner sm"></span> }
+                                            Tôi đã chuyển khoản – kiểm tra ngay
+                                        </button>
+
+                                        if (_order.Demo)
+                                        {
+                                            <div class="alert alert-warn small mt-2">
+                                                <b>Chế độ demo:</b> chưa cấu hình tài khoản VietQR nên ngân hàng sẽ không báo về. Bấm nút dưới để giả lập đã nhận đủ tiền cọc.
+                                            </div>
+                                            <button type="button" class="btn btn-outline btn-block" disabled="@_checking" @onclick="SimulatePaidAsync">
+                                                Giả lập đã thanh toán (demo)
+                                            </button>
+                                        }
+                                    }
                                 }
                             }
                             else
@@ -182,6 +204,7 @@
     private System.Timers.Timer? _timer;
     private TimeSpan _remaining;
     private DepositOrder? _order;
+    private string? _qrImage;
     private System.Timers.Timer? _poll;
     private bool _checking;
 
@@ -281,8 +304,8 @@
         _error = null;
         try
         {
-            _order = await PaymentSvc.CreateDepositOrderAsync(booking.Id);
-            StartPolling();
+            await ApplyOrderAsync(await PaymentSvc.CreateDepositOrderAsync(booking.Id));
+            if (_order?.Status == "PENDING") StartPolling();
         }
         catch (ApiException ex)
         {
@@ -311,25 +334,8 @@
         try
         {
             var o = await PaymentSvc.InquireDepositAsync(_order.OrderId);
-            _order = o;
-            var code = Uri.EscapeDataString(booking.BookingCode);
-
-            if (o.Status == "PAID")
-            {
-                _poll?.Stop();
-                State.ClearSelection();
-                Nav.NavigateTo($"payment/result?status=success&bookingId={booking.Id}&code={code}&amount={o.Amount:0}");
-            }
-            else if (o.Status is "REFUND_REQUIRED" or "REFUNDED")
-            {
-                _poll?.Stop();
-                Nav.NavigateTo($"payment/result?status=failed&bookingId={booking.Id}&code={code}&message=" +
-                               Uri.EscapeDataString("Đã nhận tiền sau khi hết thời gian giữ phòng. Khách sạn sẽ hoàn tiền cho bạn."));
-            }
-            else if (!silent)
-            {
-                _error = "Chưa nhận được tiền chuyển khoản. Vui lòng thử lại sau ít giây.";
-            }
+            await ApplyOrderAsync(o);
+            HandleResult(o, booking, silent);
         }
         catch (ApiException ex)
         {
@@ -339,6 +345,74 @@
         {
             _checking = false;
             StateHasChanged();
+        }
+    }
+
+    // Chế độ demo: giả lập ngân hàng báo đã nhận tiền.
+    private async Task SimulatePaidAsync()
+    {
+        var booking = State.CurrentBooking;
+        if (_order is null || booking is null || _checking) return;
+
+        _checking = true;
+        _error = null;
+        try
+        {
+            var o = await PaymentSvc.SimulateDepositPaidAsync(_order.OrderId);
+            await ApplyOrderAsync(o);
+            HandleResult(o, booking, false);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _checking = false;
+            StateHasChanged();
+        }
+    }
+
+    // Lưu đơn mới nhất, vẽ QR nếu API không trả ảnh, cập nhật đồng hồ theo hạn giữ phòng mới (server nới khi tạo QR).
+    private async Task ApplyOrderAsync(DepositOrder o)
+    {
+        var qrChanged = _order?.OrderId != o.OrderId || _qrImage is null;
+        _order = o;
+        if (qrChanged)
+        {
+            _qrImage = !string.IsNullOrEmpty(o.QrDataUrl) ? o.QrDataUrl
+                : string.IsNullOrEmpty(o.QrCode) ? "" : await JS.InvokeAsync<string>("hotel.qrDataUrl", o.QrCode);
+        }
+        if (o.HoldExpiresAt is not null && State.CurrentBooking is { } current && current.HoldExpiresAt != o.HoldExpiresAt)
+        {
+            State.CurrentBooking = current with { HoldExpiresAt = o.HoldExpiresAt };
+            UpdateRemaining();
+        }
+    }
+
+    private void HandleResult(DepositOrder o, BookingResponse booking, bool silent)
+    {
+        var code = Uri.EscapeDataString(booking.BookingCode);
+
+        if (o.Status == "PAID")
+        {
+            _poll?.Stop();
+            State.ClearSelection();
+            Nav.NavigateTo($"payment/result?status=success&bookingId={booking.Id}&code={code}&amount={o.Amount:0}");
+        }
+        else if (o.Status is "REFUND_REQUIRED" or "REFUNDED")
+        {
+            _poll?.Stop();
+            Nav.NavigateTo($"payment/result?status=failed&bookingId={booking.Id}&code={code}&message=" +
+                           Uri.EscapeDataString("Đã nhận tiền nhưng phòng không còn được giữ hoặc số tiền không khớp tiền cọc. Khách sạn sẽ liên hệ hoàn tiền cho bạn."));
+        }
+        else if (o.Status == "FAILED")
+        {
+            _poll?.Stop();
+        }
+        else if (!silent)
+        {
+            _error = "Chưa nhận được tiền chuyển khoản. Vui lòng thử lại sau ít giây.";
         }
     }
 
@@ -355,10 +429,17 @@
     {
         _timer?.Dispose();
         _timer = new System.Timers.Timer(1000);
-        _timer.Elapsed += (_, _) => _ = InvokeAsync(() =>
+        _timer.Elapsed += (_, _) => _ = InvokeAsync(async () =>
         {
+            var wasExpired = _expired;
             UpdateRemaining();
             StateHasChanged();
+            // Vừa hết giờ giữ phòng: ngừng hỏi mỗi 5 giây, kiểm tra lần cuối phòng khi tiền vừa về.
+            if (_expired && !wasExpired && _order is not null)
+            {
+                _poll?.Stop();
+                await CheckPaidAsync(true);
+            }
         });
         _timer.Start();
     }
@@ -374,6 +455,10 @@
             _remaining = TimeSpan.Zero;
             _expired = true;
             _timer?.Stop();
+        }
+        else
+        {
+            _expired = false;
         }
     }
 
