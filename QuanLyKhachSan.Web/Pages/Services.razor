@@ -18,9 +18,15 @@
                 <div class="card-body">
                     <span class="section-kicker">TRẢI NGHIỆM TẠI KHÁCH SẠN</span>
                     <h1>@service.TenDichVu</h1>
+                    <p class="service-intro">@ServicePresentation.For(service.TenDichVu).Intro</p>
+                    <h2>Trải nghiệm dịch vụ</h2>
+                    <p>@ServicePresentation.For(service.TenDichVu).Experience</p>
+                    <h2>Thông tin phục vụ</h2>
                     <p>@(string.IsNullOrWhiteSpace(service.MoTa) ? "Vui lòng liên hệ lễ tân để biết thêm thông tin về dịch vụ." : service.MoTa)</p>
                     <p class="price">@Fmt.Money(service.DonGia) / @service.DonViTinh</p>
-                    <p>Liên hệ lễ tân để được tư vấn và hỗ trợ sử dụng dịch vụ.</p>
+                    <h2>Trước khi sử dụng</h2>
+                    <p>@ServicePresentation.For(service.TenDichVu).Preparation</p>
+                    <p class="muted small">Hình ảnh minh họa cho dịch vụ.</p>
                     <a class="btn btn-primary" href="tel:@HotelInfo.PhoneRaw">@HotelInfo.Phone</a>
                 </div>
             </article>
@@ -34,7 +40,7 @@
             {
                 <a class="service-banner" href="services/@service.Id">
                     <img src="@Illustration(service)" alt="Minh họa @service.TenDichVu" loading="lazy" />
-                    <div><h2>@service.TenDichVu</h2><span>Khám phá dịch vụ →</span></div>
+                    <div><h2>@service.TenDichVu</h2><p>@ServicePresentation.For(service.TenDichVu).Intro</p><span>Khám phá dịch vụ →</span></div>
                 </a>
             }
         </div>
@@ -63,11 +69,5 @@
         catch (ApiException ex) { _error = ex.Message; }
     }
     private static string Illustration(Service service)
-    {
-        var name = service.TenDichVu.ToLowerInvariant();
-        var kind = name.Contains("ăn") || name.Contains("sáng") || name.Contains("ẩm thực") ? "dining"
-            : name.Contains("giặt") ? "laundry"
-            : name.Contains("xe") || name.Contains("đón") ? "transport" : "wellness";
-        return $"images/services/{kind}.svg";
-    }
+        => $"images/services/{ServicePresentation.For(service.TenDichVu).Image}.jpg";
 }

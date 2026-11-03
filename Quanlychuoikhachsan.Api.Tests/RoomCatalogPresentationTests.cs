@@ -88,7 +88,7 @@ public sealed class RoomCatalogPresentationTests
             return System.Net.WebUtility.HtmlDecode(result.ToHtmlString());
         });
         Assert.Contains("Bữa sáng", html);
-        Assert.Contains("images/services/dining.svg", html);
+        Assert.Contains("images/services/dining.jpg", html);
         Assert.DoesNotContain("<input", html);
         Assert.DoesNotContain("<select", html);
         Assert.DoesNotContain("Yêu cầu dịch vụ", html);

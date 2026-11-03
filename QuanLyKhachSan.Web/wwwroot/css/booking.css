@@ -383,3 +383,11 @@ html, body { max-width: 100%; overflow-x: hidden; }
 .bed-option.active { background:#315c49; border-color:#315c49; color:white; }
 .bed-option:focus-visible { outline:3px solid #b8d66a; outline-offset:3px; }
 @media(max-width:700px) { .room-type-grid { grid-template-columns:1fr; max-width:480px; gap:20px; } }
+
+.service-detail { align-items:start; }
+.service-detail>img { height:auto; aspect-ratio:4/5; object-fit:cover; }
+.service-detail h2 { font-size:1.1rem; margin-top:24px; }
+.service-detail p { line-height:1.8; }
+.service-intro { font-size:1.15rem; color:#315c49; }
+.service-banner p { color:#e2eade; line-height:1.6; max-width:42ch; }
+@media(max-width:700px) { .service-detail>img { aspect-ratio:3/2; } .service-detail .card-body { padding:24px; } }
