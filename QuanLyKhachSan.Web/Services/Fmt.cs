@@ -19,10 +19,37 @@ public static class Fmt
         => d.Kind == DateTimeKind.Unspecified ? System.DateTime.SpecifyKind(d, DateTimeKind.Utc) : d.ToUniversalTime();
 }
 
-/// <summary>Ảnh minh họa phòng (SVG mẫu trong wwwroot/images/rooms). Thay bằng ảnh thật khi có.</summary>
+/// <summary>
+/// Ảnh phòng. Đặt ảnh thật vào wwwroot/images/rooms/photos/ theo tên: {mã-loại-phòng}-{số}.jpg
+/// (vd: std-1.jpg, std-2.jpg, dlx-1.jpg, exe-3.webp ...; hỗ trợ jpg/jpeg/png/webp).
+/// Có thể thêm "default-1.jpg"... làm ảnh dùng chung cho loại phòng chưa có ảnh riêng.
+/// Loại phòng nào chưa có ảnh thì tự dùng ảnh SVG minh họa cũ.
+/// </summary>
 public static class RoomImages
 {
     private const int TypeCount = 6;
+    private static readonly string[] Exts = { ".jpg", ".jpeg", ".png", ".webp" };
+    private static Dictionary<string, List<string>> _photos = new(StringComparer.OrdinalIgnoreCase);
+
+    /// <summary>Quét thư mục ảnh một lần khi khởi động (gọi từ Program.cs).</summary>
+    public static void Init(string webRootPath)
+    {
+        var dir = Path.Combine(webRootPath, "images", "rooms", "photos");
+        var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
+        if (Directory.Exists(dir))
+        {
+            foreach (var f in Directory.GetFiles(dir).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            {
+                if (!Exts.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)) continue;
+                var name = Path.GetFileNameWithoutExtension(f);
+                var dash = name.LastIndexOf('-');
+                var code = dash > 0 ? name[..dash] : name;
+                if (!map.TryGetValue(code, out var list)) map[code] = list = new List<string>();
+                list.Add("images/rooms/photos/" + Path.GetFileName(f));
+            }
+        }
+        _photos = map;
+    }
 
     private static int Idx(string roomTypeCode)
     {
@@ -31,10 +58,21 @@ public static class RoomImages
         return h % TypeCount;
     }
 
-    public static string Cover(PublicRoom r) => $"images/rooms/room-{Idx(r.RoomTypeCode)}-{(int)(r.Id % 3)}.svg";
+    private static List<string>? Photos(string code)
+        => _photos.TryGetValue(code, out var l) && l.Count > 0 ? l
+         : _photos.TryGetValue("default", out var d) && d.Count > 0 ? d : null;
+
+    public static string Cover(PublicRoom r) => Gallery(r)[0];
 
     public static IReadOnlyList<string> Gallery(PublicRoom r)
     {
+        var photos = Photos(r.RoomTypeCode);
+        if (photos is not null)
+        {
+            // Xoay vòng theo phòng để các phòng cùng loại không giống hệt nhau
+            var shift = (int)(r.Id % photos.Count);
+            return photos.Skip(shift).Concat(photos.Take(shift)).ToList();
+        }
         var i = Idx(r.RoomTypeCode);
         return new[]
         {

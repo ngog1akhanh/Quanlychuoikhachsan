@@ -30,6 +30,8 @@ builder.Services.AddScoped<ReviewService>();
 
 var app = builder.Build();
 
+RoomImages.Init(app.Environment.WebRootPath ?? Path.Combine(app.Environment.ContentRootPath, "wwwroot"));
+
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
