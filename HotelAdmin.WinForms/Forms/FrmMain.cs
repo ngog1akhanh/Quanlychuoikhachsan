@@ -213,11 +213,19 @@ public sealed class FrmMain : Form
         refresh.Click += async (_, _) => await ReloadCurrentAsync();
 
         var bell = HeaderIcon(Glyph.Bell, "Thông báo nội bộ");
-        bell.ShowDot = true;
-        bell.Click += (_, _) => MessageBox.Show(this,
-            "Thông báo nội bộ (mục 17.2): booking mới, yêu cầu hủy, phòng cần dọn, sự cố, tồn kho thấp.\n\n" +
-            "Backend chưa có API thông báo. Đề xuất: bảng thong_bao + SignalR hub để đẩy realtime.",
-            "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        bell.ShowDot = false;
+        async Task UpdateBellAsync()
+        {
+            try { bell.ShowDot = Models.J.Items(await api.GetJsonAsync("v1/notifications?unreadOnly=true&pageSize=1")).Count > 0; bell.Invalidate(); }
+            catch (ApiException ex) { if (!ex.IsUnauthorized) Dialogs.Ui.Error(this, ex.Message); }
+        }
+        Shown += async (_, _) => await UpdateBellAsync();
+        bell.Click += async (_, _) =>
+        {
+            using var dialog = new Dialogs.NotificationsDialog(api, session);
+            dialog.ShowDialog(this);
+            await UpdateBellAsync();
+        };
 
         var avatar = new Avatar { Text = session.Initials, Size = new Size(42, 42), Margin = new Padding(12, 0, 8, 0) };
         var who = new Panel { Size = new Size(190, 44), BackColor = AppTheme.Background, Margin = new Padding(0) };

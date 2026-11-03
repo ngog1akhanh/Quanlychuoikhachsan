@@ -20,5 +20,6 @@
     <Compile Include="../HotelAdmin.WinForms/Models/*.cs" Link="Client/%(Filename)%(Extension)" />
     <Compile Include="../HotelAdmin.WinForms/Services/AppConfig.cs" Link="Client/AppConfig.cs" />
     <Compile Include="../HotelAdmin.WinForms/Services/UserSession.cs" Link="Client/UserSession.cs" />
+    <Compile Include="../HotelAdmin.WinForms/Services/Lookups.cs" Link="Client/Lookups.cs" />
   </ItemGroup>
 </Project>

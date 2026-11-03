@@ -13,11 +13,14 @@ public sealed record PublicRoom(
     decimal? AreaM2,
     string? Description,
     int MaxAdults,
-    int MaxChildren)
+    int MaxChildren,
+    IReadOnlyList<QuotedNight>? NightPrices = null)
 {
     /// <summary>Giá 1 đêm = giá cơ bản + phụ thu riêng của phòng.</summary>
     public decimal UnitPrice => BaseNightlyPrice + NightSurcharge;
 }
+
+public sealed record QuotedNight(DateOnly StayDate, decimal FinalPrice);
 
 /// <summary>Điều kiện tìm phòng (dùng chung Home / RoomList).</summary>
 public sealed class RoomSearchQuery

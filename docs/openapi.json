@@ -12413,6 +12413,18 @@
           "special_request": {
             "type": "string",
             "nullable": true
+          },
+          "contact_name": {
+            "type": "string",
+            "nullable": true
+          },
+          "contact_phone": {
+            "type": "string",
+            "nullable": true
+          },
+          "contact_email": {
+            "type": "string",
+            "nullable": true
           }
         },
         "additionalProperties": false

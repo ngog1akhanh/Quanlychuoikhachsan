@@ -6,7 +6,7 @@
 /* ---------- hero + search ---------- */
 .hero {
   position: relative; color: #fff; text-align: center; padding: 84px 16px 120px;
-  background: linear-gradient(rgba(11,42,74,.55), rgba(11,42,74,.82)), url("../images/hero.svg") center/cover no-repeat, var(--navy);
+  background: linear-gradient(rgba(11,42,74,.55), rgba(11,42,74,.82)), url("../images/banner.svg") center/cover no-repeat, var(--navy);
 }
 .hero h1 { color: #fff; font-size: 42px; margin-bottom: 10px; text-shadow: 0 2px 12px rgba(0,0,0,.3); }
 .hero p { color: #e1ebf6; font-size: 18px; margin: 0; }
@@ -153,7 +153,7 @@
 /* ===== Lively guest-facing booking experience ===== */
 .booking-hero {
   min-height: 570px; position: relative; overflow: hidden; color: #fff;
-  background: linear-gradient(90deg, rgba(22,53,37,.94) 0%, rgba(31,69,48,.82) 48%, rgba(31,69,48,.20) 100%), url("../images/hero.svg") center/cover no-repeat, #2F5D45;
+  background: linear-gradient(90deg, rgba(22,53,37,.94) 0%, rgba(31,69,48,.82) 48%, rgba(31,69,48,.20) 100%), url("../images/banner.svg") center/cover no-repeat, #2F5D45;
 }
 .booking-hero::after { content: ""; position: absolute; width: 470px; height: 470px; border: 1px solid rgba(231,246,143,.28); border-radius: 50%; right: -110px; top: 45px; box-shadow: 0 0 0 55px rgba(231,246,143,.045), 0 0 0 110px rgba(231,246,143,.035); pointer-events: none; }
 .booking-hero-shade { position: absolute; inset: 0; background: radial-gradient(circle at 76% 30%, rgba(231,246,143,.16), transparent 32%); }
@@ -293,7 +293,7 @@
   background-color: #244A36;
   background-image:
     linear-gradient(90deg, rgba(20, 48, 34, .94) 0%, rgba(31, 69, 48, .82) 46%, rgba(31, 69, 48, .20) 100%),
-    url("../images/hero.svg");
+    url("../images/banner.svg");
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;

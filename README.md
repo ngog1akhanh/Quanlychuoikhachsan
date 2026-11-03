@@ -11,10 +11,13 @@ Nhánh `codex/integrate-lmt-api` tích hợp website của Trung, WinForms/API m
 
 ## Chuẩn bị database
 
+**Nâng cấp từ bản đã cài:** xem [bản sửa lỗi 03/11/2026](docs/BUG_FIXES_2026_11_03.md). Phiên bản này thêm liên hệ riêng theo booking; database cũ cần chạy `add_booking_contact.sql` một lần. Database mới dùng bundle bên dưới đã có sẵn các cột.
+
 1. Cài MySQL >= 8.0.16 hoặc MariaDB >= 10.4.
 2. Import **một file** [hotel_management_compatible.sql](Quanlychuoikhachsan/Database/Install/hotel_management_compatible.sql): 67 bảng, 5 view, 6 vai trò, 42 quyền. Không chạy lại các script nguồn sau bundle.
 3. Nếu cần dữ liệu/tài khoản demo, chạy riêng `Database/Scripts/seed_demo.sql` với database đã chọn. Seed không tự đổi database; chỉ dùng cho demo. Các tài khoản trong [danh sách demo](<tai khoan test demo.txt>) chỉ có sau bước này.
 4. Tùy chọn sau seed demo: chạy `Database/Scripts/seed_thong_ke.sql` trên cùng database để có hóa đơn lịch sử cho báo cáo theo kỳ/nhân viên/sản phẩm. Không cần chạy `fix_ngay_lap_hoa_don.sql` khi cài mới; đó là script hiệu chỉnh dữ liệu cũ cần đối chiếu riêng.
+5. Tùy chọn trên database demo: chạy `Database/Scripts/seed_operations_demo.sql` để có việc buồng phòng và tồn kho/phiếu nhập mẫu.
 
 Ví dụ PowerShell 7 tại thư mục repo (có thể thay `mysql` bằng `mariadb`):
 

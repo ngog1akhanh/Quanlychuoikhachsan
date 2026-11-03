@@ -57,7 +57,7 @@ public sealed class InventoryPage : ModulePage
     {
         warehouseNames = await lookups.NamesAsync(Lookups.WarehousesUrl, "ten_kho");
         supplierNames = await lookups.NamesAsync(Lookups.SuppliersUrl, "ten_nha_cung_cap");
-        itemNames = (await lookups.ListAsync("v1/app/inventory-items")).ToDictionary(e => J.Long(e, "id"), e => $"{J.Str(e, "code")} · {J.Str(e, "name")}");
+        itemNames = (await lookups.ListAsync("v1/app/inventory-items?pageSize=100")).ToDictionary(e => J.Long(e, "id"), e => $"{J.Str(e, "code")} · {J.Str(e, "name")}");
     }
 
     private void InvalidateCatalog()
@@ -277,7 +277,7 @@ public sealed class InventoryPage : ModulePage
     private async Task<bool> ConfirmPurchaseAsync(JsonElement row)
     {
         var detail = await Api.GetJsonAsync($"v1/purchase-orders/{J.Long(row, "id")}");
-        var catalog = (await lookups.ListAsync("v1/app/inventory-items")).ToDictionary(e => J.Long(e, "id"));
+        var catalog = (await lookups.ListAsync(Lookups.ItemsUrl)).ToDictionary(e => J.Long(e, "id"));
         var lines = J.Items(detail, "chi_tiet");
         var editor = new LinesEditor(Math.Min(320, 60 + lines.Count * 32), false,
             new LineCol("item", "Mặt hàng", LineKind.ReadOnly, 150),
@@ -286,7 +286,7 @@ public sealed class InventoryPage : ModulePage
             new LineCol("lot_code", "Mã lô", LineKind.Text, 70),
             new LineCol("manufacture_date", "NSX", LineKind.Date, 75),
             new LineCol("expiry_date", "HSD", LineKind.Date, 75),
-            new LineCol("serials", "Serial (cách nhau dấu phẩy)", LineKind.Text, 140)) { SkipEmptyRows = false };
+            new LineCol("serials", "Số sê-ri (ngăn bằng dấu phẩy)", LineKind.Text, 140)) { SkipEmptyRows = false };
         foreach (var l in lines)
         {
             var item = catalog.GetValueOrDefault(J.Long(l, "danh_muc_hang_hoa_id"));

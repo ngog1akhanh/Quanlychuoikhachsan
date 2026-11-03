@@ -21,7 +21,8 @@ public sealed partial class MySqlDatabaseTests
         await using var db = database.Context();
         await using var factory = new RealDatabaseApiFactory(db.Database.GetConnectionString()!);
         using var http = factory.CreateClient(new() { BaseAddress = new Uri("https://localhost/") });
-        var state = new AuthState(new ProtectedSessionStorage(new NoBrowserStorage(), new EphemeralDataProtectionProvider()));
+        var bookingState = new BookingState();
+        var state = new AuthState(new ProtectedSessionStorage(new NoBrowserStorage(), new EphemeralDataProtectionProvider()), bookingState);
         var api = new ApiClient(http, state, Options.Create(new ApiOptions { UseMockData = false }));
         var auth = new AuthService(api, state);
         await auth.LoginAsync(new() { Identifier = "an.nguyen@example.com", Password = "12345" });
@@ -39,7 +40,8 @@ public sealed partial class MySqlDatabaseTests
         var bookings = new WebBooking(api);
         var booking = await bookings.CreateAsync(new([rooms[0].Id],
             HotelTime.ToUtc(search.CheckIn.ToDateTime(new TimeOnly(14, 0))),
-            HotelTime.ToUtc(search.CheckOut.ToDateTime(new TimeOnly(12, 0))), 1, 0, "Web integration"));
+            HotelTime.ToUtc(search.CheckOut.ToDateTime(new TimeOnly(12, 0))), 1, 0, "Web integration",
+            "Người liên hệ", "0987654321", "contact@example.com"));
         Assert.True(booking.Id > 0);
         Assert.Equal("HOLD", booking.Status);
         Assert.NotNull(await bookings.GetMyBookingAsync(booking.Id));
@@ -57,6 +59,18 @@ public sealed partial class MySqlDatabaseTests
         Assert.True(cancellation.Id > 0);
         Assert.Equal("CHO_DUYET", cancellation.Status);
         Assert.Equal(booking.Id, cancellation.BookingId);
+        var saved = await db.DatPhongs.SingleAsync(x => x.Id == booking.Id);
+        Assert.Equal("0987654321", saved.ContactPhone);
+        Assert.NotEqual(saved.ContactPhone, (await new CustomerService(api).GetProfileAsync()).PhoneNumber);
+        await LoginAsync(http, "admin.com");
+        var desk = await ExpectJsonAsync(http, $"v1/front-desk/bookings/{booking.Id}");
+        Assert.Equal("0987654321", desk.GetProperty("customer").GetProperty("phone").GetString());
+        bookingState.Guest.FullName = "Khách cũ";
+        bookingState.Guest.PhoneNumber = "0987654321";
+        await auth.LogoutAsync();
+        await auth.LoginAsync(new() { Identifier = "binh.tran@example.com", Password = "12345" });
+        Assert.True(string.IsNullOrEmpty(bookingState.Guest.PhoneNumber));
+        Assert.Null(bookingState.CurrentBooking);
     }
 
     // Chỉ thay bộ nhớ trình duyệt; client vẫn dùng đúng DTO, JSON và request của web.

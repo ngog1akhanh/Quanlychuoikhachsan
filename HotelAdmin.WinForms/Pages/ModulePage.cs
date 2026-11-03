@@ -20,7 +20,7 @@ public abstract class ModulePage : PageBase
         Padding = new Padding(24, 0, 24, 16);
         Toolbar = new FlowLayoutPanel
         {
-            Dock = DockStyle.Top, Height = 56, WrapContents = false, BackColor = AppTheme.Background, Padding = new Padding(0, 4, 0, 8)
+            Dock = DockStyle.Top, Height = 100, AutoScroll = true, WrapContents = true, BackColor = AppTheme.Background, Padding = new Padding(0, 4, 0, 8)
         };
     }
 
@@ -39,7 +39,7 @@ public abstract class ModulePage : PageBase
     protected void BuildTabs()
     {
         tabs = new SegmentedTabs(views.Select(v => v.Title).ToArray()) { Margin = new Padding(0, 0, 12, 0) };
-        tabs.SelectedIndexChanged += async (_, _) => await ShowCurrentAsync(false);
+        tabs.SelectedIndexChanged += async (_, _) => await ShowCurrentAsync(true);
         Toolbar.Controls.Add(tabs);
         Toolbar.Controls.SetChildIndex(tabs, 0);
         Controls.Add(host);

@@ -28,7 +28,7 @@
             <div>
                 <RoomGallery Images="RoomImages.Gallery(r)" Title="@r.RoomTypeName" />
 
-                <h1 class="mt-2">@r.RoomTypeName <small class="muted" style="font-size:18px">· Phòng @r.RoomNumber</small></h1>
+                <h1 class="mt-2">@r.RoomTypeName</h1>
 
                 <div class="spec-grid">
                     <div class="spec"><small>Diện tích</small><b>@(r.AreaM2 is null ? "—" : r.AreaM2.Value.ToString("0.#") + " m²")</b></div>
@@ -58,7 +58,7 @@
                         <tbody>
                             @for (var d = q.CheckIn; d < q.CheckOut; d = d.AddDays(1))
                             {
-                                <tr><td>@Fmt.Weekday(d)</td><td>@Fmt.Money(r.UnitPrice)</td></tr>
+                                <tr><td>@Fmt.Weekday(d)</td><td>@Fmt.Money(r.NightPrices?.FirstOrDefault(n => n.StayDate == d)?.FinalPrice ?? r.UnitPrice)</td></tr>
                             }
                         </tbody>
                         <tfoot><tr><td>Tổng @q.Nights đêm</td><td>@Fmt.Money(r.UnitPrice * q.Nights)</td></tr></tfoot>

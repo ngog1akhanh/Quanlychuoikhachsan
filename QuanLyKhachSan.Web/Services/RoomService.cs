@@ -56,11 +56,12 @@ public sealed class RoomService
             finally { gate.Release(); }
 
             var nights = Math.Max(1, it.Quote.Nights?.Count ?? q.Nights);
-            var nightly = Math.Round(it.Quote.Total / nights, 0);
+            var nightly = it.Quote.Total / nights;
             return new PublicRoom(
                 it.Room.Id, it.Room.RoomNumber, it.Room.RoomTypeCode, it.Room.RoomTypeName,
                 nightly, 0m, d?.Tang, d?.LoaiView, d?.RoomType?.DienTichM2, d?.MoTa,
-                d?.RoomType?.SoNguoiLonToiDa ?? q.Adults, d?.RoomType?.SoTreEmToiDa ?? q.Children);
+                d?.RoomType?.SoNguoiLonToiDa ?? q.Adults, d?.RoomType?.SoTreEmToiDa ?? q.Children,
+                it.Quote.Nights?.Select(n => new QuotedNight(n.StayDate, n.FinalPrice)).ToList());
         }).ToList();
 
         var rooms = await Task.WhenAll(tasks);

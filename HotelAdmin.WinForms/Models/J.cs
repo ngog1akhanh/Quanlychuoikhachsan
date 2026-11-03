@@ -94,7 +94,7 @@ public static class J
         var target = path is null ? e : Get(e, path) ?? default;
         if (target.ValueKind == JsonValueKind.Array) return target.EnumerateArray().ToList();
         if (target.ValueKind != JsonValueKind.Object) return [];
-        foreach (var key in new[] { "items", "data", "customers" })
+        foreach (var key in new[] { "items", "data", "customers", "rooms" })
             if (target.TryGetProperty(key, out var inner))
             {
                 if (inner.ValueKind == JsonValueKind.Array) return inner.EnumerateArray().ToList();

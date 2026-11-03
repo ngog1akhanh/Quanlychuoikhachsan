@@ -1,16 +1,15 @@
 <div class="card room-card @(Selected ? "selected" : "")">
     <div class="thumb">
         <a href="@DetailHref"><img src="@RoomImages.Cover(Room)" alt="@Room.RoomTypeName" loading="lazy" /></a>
-        <span class="room-no">Phòng @Room.RoomNumber</span>
         @if (Selected) { <span class="tick">✓ Đã chọn</span> }
     </div>
     <div class="info">
         <h3><a href="@DetailHref">@Room.RoomTypeName</a></h3>
         <div class="room-meta">
-            @if (!string.IsNullOrEmpty(Room.Floor)) { <span>🏢 Tầng @Room.Floor</span> }
-            <span>🌅 @(string.IsNullOrEmpty(Room.ViewType) ? "Không ghi view" : Room.ViewType)</span>
-            @if (Room.AreaM2 is not null) { <span>📐 @Room.AreaM2.Value.ToString("0.#") m²</span> }
-            <span>👥 @Room.MaxAdults người lớn@(Room.MaxChildren > 0 ? $", {Room.MaxChildren} trẻ em" : "")</span>
+            @if (!string.IsNullOrEmpty(Room.Floor)) { <span>Tầng @Room.Floor</span> }
+            <span>@(string.IsNullOrEmpty(Room.ViewType) ? "Không ghi view" : Room.ViewType)</span>
+            @if (Room.AreaM2 is not null) { <span>@Room.AreaM2.Value.ToString("0.#") m²</span> }
+            <span>@Room.MaxAdults người lớn@(Room.MaxChildren > 0 ? $", {Room.MaxChildren} trẻ em" : "")</span>
         </div>
         @if (!string.IsNullOrEmpty(Room.Description))
         {
@@ -19,7 +18,7 @@
         <div class="room-foot">
             <div class="room-price">
                 <b>@Fmt.Money(Room.UnitPrice)</b>
-                <small>/đêm</small>
+                <small>/đêm (bình quân)</small>
                 @if (Nights > 0)
                 {
                     <small><br />@Nights đêm: @Fmt.Money(Room.UnitPrice * Nights)</small>

@@ -362,6 +362,8 @@ public sealed class DlgCheckIn : DialogBase
 
     private async Task SaveAsync()
     {
+        guests.CommitEdit(DataGridViewDataErrorContexts.Commit);
+        guests.EndEdit();
         var detailOf = booking.Rooms.ToDictionary(r => r.RoomNumber, r => r.DetailId);
         var list = new List<StayGuestDto>();
         foreach (DataGridViewRow row in guests.Rows)

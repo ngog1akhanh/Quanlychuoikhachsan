@@ -26,6 +26,19 @@ internal static class Program
                 var login = await api.LoginAsync(Environment.GetEnvironmentVariable("HOTEL_SMOKE_IDENTIFIER") ?? "admin.com", Environment.GetEnvironmentVariable("HOTEL_SMOKE_PASSWORD")!);
                 api.SetToken(login.AccessToken);
                 var session = new UserSession(await api.GetMeAsync(), DateTime.UtcNow.AddSeconds(login.ExpiresIn));
+                using (var inbox = new HotelAdmin.Forms.Dialogs.NotificationsDialog(api, session) { Opacity = 0 })
+                {
+                    inbox.Shown += async (_, _) =>
+                    {
+                        await handler.IdleAsync();
+                        using var snapshot = new Bitmap(inbox.Width, inbox.Height);
+                        inbox.DrawToBitmap(snapshot, inbox.ClientRectangle);
+                        snapshot.Save(Path.Combine(args[1], "NotificationsDialog.png"), ImageFormat.Png);
+                        inbox.Close();
+                    };
+                    inbox.ShowDialog(host);
+                    Console.WriteLine("PASS NotificationsDialog");
+                }
                 var pages = new Func<PageBase>[] {
                     () => new DashboardPage(api, session), () => new RoomsPage(api, session),
                     () => new BookingsPage(api, session), () => new FrontDeskPage(api, session),

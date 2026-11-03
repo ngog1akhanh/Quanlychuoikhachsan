@@ -4,8 +4,8 @@ using HotelAdmin.Models;
 namespace HotelAdmin.Services;
 
 /// <summary>
-/// Danh mục dùng cho ComboBox (phương thức thanh toán, phòng, nhân viên, kho, mặt hàng...), có bộ nhớ đệm theo trang.
-/// Gọi Invalidate sau khi thêm/sửa danh mục để lần sau tải lại.
+/// Danh mục dùng cho ComboBox (phương thức thanh toán, phòng, nhân viên, kho, mặt hàng...).
+/// Tải lại khi mở form để nhận thay đổi từ các trang khác.
 /// </summary>
 public sealed class Lookups(ApiClient api)
 {
@@ -17,11 +17,10 @@ public sealed class Lookups(ApiClient api)
         else cache.Remove(key);
     }
 
-    /// <summary>Tải (có cache) danh sách JSON từ url.</summary>
+    /// <summary>Tải danh sách JSON mới nhất từ url.</summary>
     public async Task<List<JsonElement>> ListAsync(string url)
     {
-        if (cache.TryGetValue(url, out var rows)) return rows;
-        rows = J.Items(await api.GetJsonAsync(url));
+        var rows = J.Items(await api.GetJsonAsync(url));
         cache[url] = rows;
         return rows;
     }

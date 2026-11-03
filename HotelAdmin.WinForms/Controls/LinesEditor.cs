@@ -94,6 +94,7 @@ public sealed class LinesEditor : Panel
     /// </summary>
     public List<Dictionary<string, object?>> Lines()
     {
+        grid.CommitEdit(DataGridViewDataErrorContexts.Commit);
         grid.EndEdit();
         var result = new List<Dictionary<string, object?>>();
         foreach (DataGridViewRow row in grid.Rows)
