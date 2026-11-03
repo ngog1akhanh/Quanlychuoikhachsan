@@ -120,3 +120,18 @@ dotnet run --project tools/WinFormsSmoke -- http://localhost:5005/ review/winfor
 Phạm vi còn lại: chưa kiểm thử tải nhiều người dùng, deadlock diện rộng, MySQL riêng, ngân hàng/SMTP thật hoặc mọi thao tác ghi trên từng màn hình. Kết quả trên xác nhận các luồng đã kiểm tra, không phải cam kết không còn lỗi trong mọi tình huống.
 
 Sau khi chạy test, sinh lại tài liệu bằng `python scripts/export_api_docs.py`. Khi đổi phân quyền controller, sinh lại SQL bằng `python scripts/generate_api_permissions.py` rồi rà soát trước khi áp dụng vào database.
+
+## Cập nhật LMT `bef8ea4` (03/11/2026)
+
+Đã merge `9e16ffc` (ảnh web) và `bef8ea4` (ngày sinh nhận phòng) vào nhánh tích hợp; giữ nguyên nhánh lmt.
+
+- Giữ bố cục web 2×2 theo hạng, tùy chọn giường trong thẻ và trang dịch vụ giới thiệu.
+- Nhận 22 ảnh JPG; ảnh bìa/thư viện cố định theo hạng, sắp số tự nhiên (1, 2, 10), không xoay theo ID phòng. SUITE dùng ảnh EXE khi chưa có ảnh suite-*; ảnh suite-* được ưu tiên. SUP giữ sẵn cho hạng Superior nếu bổ sung sau. Không suy luận loại giường từ hình ảnh.
+- Nhận lịch chọn ngày sinh, giá trị DateTime/null chuyển thành DateOnly khi gọi API; giữ CommitEdit + EndEdit để lưu ô đang nhập.
+- Chặn lỗi mở lịch với ngày cũ ngoài giới hạn và lỗi đóng form khi lịch đang mở. Việc mở lịch không tự đổi ngày sinh đã lưu.
+- Giữ build project tests trong Debug. File backup mã nguồn không đưa vào bản tích hợp; bản local được giữ và ignore.
+- Không thay đổi API/DTO/schema/database; không cần import SQL lại.
+
+Kiểm chứng: solution build 0 lỗi/0 cảnh báo; toàn bộ 80 tests passed, 0 skipped (gồm 10 ca MariaDB trên database tạm). Test ảnh xác nhận bìa ổn định, thứ tự số, SUITE/EXE và SVG fallback. Kiểm tra hộp thoại WinForms thật trên STA với ngày trống, 29/02/2000, 01/01/1890 và đóng form khi lịch còn mở đều qua; không gửi dữ liệu nhận phòng trong kiểm tra giao diện này.
+
+Sau cập nhật: dừng phiên chạy cũ, build và khởi động lại API/Web/App để nạp code và quét thư mục ảnh mới.

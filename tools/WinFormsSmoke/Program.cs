@@ -9,6 +9,12 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        if (args is ["--checkin-input"])
+        {
+            ApplicationConfiguration.Initialize();
+            CheckInInputSmoke.Run();
+            return;
+        }
         if (args.Length != 2 || string.IsNullOrEmpty(Environment.GetEnvironmentVariable("HOTEL_SMOKE_PASSWORD")))
             throw new ArgumentException("Usage: WinFormsSmoke <api-url> <screenshot-folder>; set HOTEL_SMOKE_IDENTIFIER and HOTEL_SMOKE_PASSWORD.");
         ApplicationConfiguration.Initialize();
