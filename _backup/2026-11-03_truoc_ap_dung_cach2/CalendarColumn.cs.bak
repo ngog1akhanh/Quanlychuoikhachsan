@@ -1,0 +1,183 @@
+using System.Globalization;
+
+namespace HotelAdmin.Controls;
+
+/// <summary>
+/// Cột chọn ngày (dd/MM/yyyy) cho DataGridView. Giá trị ô là DateTime (chỉ phần ngày) hoặc null.
+/// Khi sửa, ô hiện DateTimePicker có ô tích: bỏ tích (hoặc nhấn Delete) = để trống.
+/// Không đọc ngày từ chữ người dùng gõ nên tránh được ký tự ẩn từ bộ gõ / khi dán.
+/// </summary>
+public sealed class CalendarColumn : DataGridViewColumn
+{
+    public const string Format = "dd/MM/yyyy";
+
+    public CalendarColumn() : base(new CalendarCell()) { }
+
+    /// <summary>Ngày nhỏ nhất được chọn.</summary>
+    public DateTime MinDate { get; set; } = new(1900, 1, 1);
+
+    /// <summary>Ngày lớn nhất được chọn; null = không giới hạn.</summary>
+    public DateTime? MaxDate { get; set; }
+
+    public override DataGridViewCell? CellTemplate
+    {
+        get => base.CellTemplate;
+        set
+        {
+            if (value is not null and not CalendarCell)
+                throw new InvalidCastException("CellTemplate phải là CalendarCell.");
+            base.CellTemplate = value;
+        }
+    }
+
+    public override object Clone()
+    {
+        var c = (CalendarColumn)base.Clone();
+        c.MinDate = MinDate;
+        c.MaxDate = MaxDate;
+        return c;
+    }
+}
+
+public sealed class CalendarCell : DataGridViewTextBoxCell
+{
+    public CalendarCell()
+    {
+        Style.Format = CalendarColumn.Format;
+        Style.FormatProvider = CultureInfo.InvariantCulture;
+        Style.NullValue = "";
+        Style.DataSourceNullValue = null;
+    }
+
+    public override Type EditType => typeof(CalendarEditingControl);
+    public override Type ValueType => typeof(DateTime);
+    public override object? DefaultNewRowValue => null;
+
+    public override void InitializeEditingControl(int rowIndex, object? initialFormattedValue, DataGridViewCellStyle dataGridViewCellStyle)
+    {
+        base.InitializeEditingControl(rowIndex, initialFormattedValue, dataGridViewCellStyle);
+        if (DataGridView?.EditingControl is not CalendarEditingControl picker) return;
+
+        var column = OwningColumn as CalendarColumn;
+        var min = column?.MinDate ?? new DateTime(1900, 1, 1);
+        var max = column?.MaxDate ?? DateTimePicker.MaximumDateTime;
+        picker.MinDate = DateTimePicker.MinimumDateTime;   // nới trước để tránh lỗi khi đổi khoảng
+        picker.MaxDate = max.Date;
+        picker.MinDate = min.Date;
+
+        var value = GetValue(rowIndex) is DateTime d ? d.Date : (DateTime?)null;
+        picker.Load(value);
+    }
+
+    public override object? ParseFormattedValue(object? formattedValue, DataGridViewCellStyle cellStyle,
+        System.ComponentModel.TypeConverter? formattedValueTypeConverter, System.ComponentModel.TypeConverter? valueTypeConverter)
+    {
+        var text = formattedValue as string;
+        if (string.IsNullOrWhiteSpace(text)) return null;
+        return DateTime.ParseExact(text.Trim(), CalendarColumn.Format, CultureInfo.InvariantCulture);
+    }
+}
+
+/// <summary>DateTimePicker làm control sửa ô của CalendarCell.</summary>
+public sealed class CalendarEditingControl : DateTimePicker, IDataGridViewEditingControl
+{
+    private bool loading;
+
+    public CalendarEditingControl()
+    {
+        Format = DateTimePickerFormat.Custom;
+        CustomFormat = CalendarColumn.Format;
+        ShowCheckBox = true;
+    }
+
+    /// <summary>Nạp giá trị ô (null = để trống: bỏ tích, gợi ý sẵn 01/01/1990 khi tích).</summary>
+    public void Load(DateTime? value)
+    {
+        loading = true;
+        try
+        {
+            var fallback = new DateTime(1990, 1, 1);
+            if (fallback < MinDate) fallback = MinDate;
+            if (fallback > MaxDate) fallback = MaxDate;
+            var v = value ?? fallback;
+            if (v < MinDate) v = MinDate;
+            if (v > MaxDate) v = MaxDate;
+            Value = v;
+            Checked = value.HasValue;
+        }
+        finally { loading = false; }
+        EditingControlValueChanged = false;
+    }
+
+    public object EditingControlFormattedValue
+    {
+        get => Checked ? Value.ToString(CalendarColumn.Format, CultureInfo.InvariantCulture) : "";
+        set
+        {
+            if (value is string s && DateTime.TryParseExact(s, CalendarColumn.Format, CultureInfo.InvariantCulture, DateTimeStyles.None, out var d))
+                Load(d);
+            else
+                Load(null);
+        }
+    }
+
+    public object GetEditingControlFormattedValue(DataGridViewDataErrorContexts context) => EditingControlFormattedValue;
+
+    public void ApplyCellStyleToEditingControl(DataGridViewCellStyle dataGridViewCellStyle)
+    {
+        Font = dataGridViewCellStyle.Font;
+        CalendarForeColor = dataGridViewCellStyle.ForeColor;
+        CalendarMonthBackground = dataGridViewCellStyle.BackColor;
+    }
+
+    public int EditingControlRowIndex { get; set; }
+
+    public bool EditingControlWantsInputKey(Keys key, bool dataGridViewWantsInputKey)
+    {
+        switch (key & Keys.KeyCode)
+        {
+            case Keys.Left: case Keys.Up: case Keys.Down: case Keys.Right:
+            case Keys.Home: case Keys.End: case Keys.PageDown: case Keys.PageUp:
+            case Keys.Delete: case Keys.Back: case Keys.Space:
+                return true;
+            default:
+                return !dataGridViewWantsInputKey;
+        }
+    }
+
+    public void PrepareEditingControlForEdit(bool selectAll) { }
+
+    public bool RepositionEditingControlOnValueChange => false;
+
+    public DataGridView? EditingControlDataGridView { get; set; }
+
+    public bool EditingControlValueChanged { get; set; }
+
+    public Cursor EditingPanelCursor => base.Cursor;
+
+    protected override void OnValueChanged(EventArgs eventargs)
+    {
+        base.OnValueChanged(eventargs);
+        MarkDirty();
+    }
+
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        // Delete / Backspace: xóa ngày sinh (để trống).
+        if (e.KeyCode is Keys.Delete or Keys.Back && Checked)
+        {
+            Checked = false;
+            MarkDirty();
+            e.Handled = true;
+            return;
+        }
+        base.OnKeyDown(e);
+    }
+
+    private void MarkDirty()
+    {
+        if (loading) return;
+        EditingControlValueChanged = true;
+        EditingControlDataGridView?.NotifyCurrentCellDirty(true);
+    }
+}

@@ -292,7 +292,7 @@ public sealed class DlgCheckIn : DialogBase
                 AppTheme.Small, AppTheme.DangerFg));
 
         }
-        grid.AddFull(Inputs.Caption("Khai báo người ở thực tế (dòng cuối để thêm khách). Ngày sinh nhập dạng dd/MM/yyyy.", AppTheme.Small, AppTheme.TextMuted));
+        grid.AddFull(Inputs.Caption("Khai báo người ở thực tế (dòng cuối để thêm khách). Ngày sinh: nhập họ tên trước, rồi bấm vào ô Ngày sinh để chọn trên lịch; nhấn Delete để xóa.", AppTheme.Small, AppTheme.TextMuted));
         BuildGuestGrid();
         grid.AddFull(guests);
         Body.Controls.Add(grid);
@@ -324,7 +324,13 @@ public sealed class DlgCheckIn : DialogBase
 
         guests.Columns.Add(room);
         guests.Columns.Add(new DataGridViewTextBoxColumn { Name = "name", HeaderText = "Họ tên", FillWeight = 120 });
-        guests.Columns.Add(new DataGridViewTextBoxColumn { Name = "birth", HeaderText = "Ngày sinh", FillWeight = 60 });
+        // Ngày sinh không gõ tay: ô chỉ đọc, bấm vào thì hiện lịch để chọn (PickBirthDate).
+        // Giá trị ô là DateTime hoặc null, hiển thị dd/MM/yyyy.
+        var birth = new DataGridViewTextBoxColumn { Name = "birth", HeaderText = "Ngày sinh", FillWeight = 60, ReadOnly = true, ValueType = typeof(DateTime) };
+        birth.DefaultCellStyle.Format = "dd/MM/yyyy";
+        birth.DefaultCellStyle.FormatProvider = System.Globalization.CultureInfo.InvariantCulture;
+        birth.DefaultCellStyle.NullValue = "(dd/MM/yyyy)";
+        guests.Columns.Add(birth);
         guests.Columns.Add(gender);
         guests.Columns.Add(doc);
         guests.Columns.Add(new DataGridViewTextBoxColumn { Name = "docno", HeaderText = "Số giấy tờ", FillWeight = 80 });
@@ -338,13 +344,31 @@ public sealed class DlgCheckIn : DialogBase
             e.Row.Cells["rep"].Value = false;
         };
         guests.DataError += (_, e) => e.ThrowException = false;
+        guests.CellClick += (_, e) =>
+        {
+            if (e.RowIndex >= 0 && e.ColumnIndex >= 0 && guests.Columns[e.ColumnIndex].Name == "birth") PickBirthDate(e.RowIndex);
+        };
+        guests.KeyDown += (_, e) =>
+        {
+            if (guests.CurrentCell?.OwningColumn?.Name != "birth") return;
+            if (e.KeyCode is Keys.F2 or Keys.Space)
+            {
+                e.Handled = true;
+                PickBirthDate(guests.CurrentCell.RowIndex);
+            }
+            else if (e.KeyCode is Keys.Delete or Keys.Back && !guests.CurrentCell.OwningRow.IsNewRow)
+            {
+                e.Handled = true;
+                guests.CurrentCell.Value = null;   // xóa ngày sinh (để trống)
+            }
+        };
 
         var roomOf = booking.Rooms.ToDictionary(r => r.DetailId, r => r.RoomNumber);
         if (booking.Guests.Count > 0)
         {
             foreach (var g in booking.Guests)
                 guests.Rows.Add(roomOf.GetValueOrDefault(g.DetailId, booking.Rooms[0].RoomNumber), g.FullName,
-                    g.BirthDate?.ToString("dd/MM/yyyy") ?? "", Genders.Contains(g.Gender ?? "") ? g.Gender ?? "" : "",
+                    g.BirthDate?.ToDateTime(TimeOnly.MinValue), Genders.Contains(g.Gender ?? "") ? g.Gender ?? "" : "",
                     DocTypes.Contains(g.DocumentType ?? "") ? g.DocumentType ?? "" : "CCCD", g.DocumentNumber ?? "", g.Nationality ?? "", g.IsRepresentative);
         }
         else
@@ -353,15 +377,53 @@ public sealed class DlgCheckIn : DialogBase
             var first = true;
             foreach (var r in booking.Rooms)
             {
-                guests.Rows.Add(r.RoomNumber, first ? booking.Customer.FullName : "", "", "", "CCCD",
+                guests.Rows.Add(r.RoomNumber, first ? booking.Customer.FullName : "", null, "", "CCCD",
                     first ? booking.Customer.IdentityNumber ?? "" : "", "Việt Nam", first);
                 first = false;
             }
         }
     }
 
+    /// <summary>
+    /// Hiện lịch (MonthCalendar) ngay dưới ô Ngày sinh; bấm một ngày là ghi vào ô và đóng lịch.
+    /// Bấm tiêu đề tháng/năm trên lịch để nhảy nhanh theo năm. Nhấn Esc hoặc bấm ra ngoài để đóng.
+    /// </summary>
+    private void PickBirthDate(int rowIndex)
+    {
+        var row = guests.Rows[rowIndex];
+        if (row.IsNewRow)
+        {
+            Ui.Error(this, "Nhập họ tên khách trước, sau đó chọn ngày sinh.");
+            return;
+        }
+        var current = row.Cells["birth"].Value as DateTime?;
+
+        var calendar = new MonthCalendar
+        {
+            MaxSelectionCount = 1,
+            MinDate = new DateTime(1900, 1, 1),
+            MaxDate = DateTime.Today,
+            ShowTodayCircle = false
+        };
+        calendar.SetDate(current ?? new DateTime(1990, 1, 1));
+
+        var popup = new ToolStripDropDown { Padding = Padding.Empty };
+        popup.Items.Add(new ToolStripControlHost(calendar) { Margin = Padding.Empty, Padding = Padding.Empty });
+        calendar.DateSelected += (_, e) =>
+        {
+            row.Cells["birth"].Value = e.Start.Date;
+            popup.Close();
+        };
+        popup.Closed += (_, _) => BeginInvoke(new Action(popup.Dispose));
+
+        var cell = guests.GetCellDisplayRectangle(guests.Columns["birth"].Index, rowIndex, false);
+        popup.Show(guests, new Point(cell.Left, cell.Bottom));
+    }
+
     private async Task SaveAsync()
     {
+        // Ghi nhận ô đang sửa dở (bấm "Nhận phòng" khi con trỏ còn trong ô).
+        guests.EndEdit();
         var detailOf = booking.Rooms.ToDictionary(r => r.RoomNumber, r => r.DetailId);
         var list = new List<StayGuestDto>();
         foreach (DataGridViewRow row in guests.Rows)
@@ -371,13 +433,8 @@ public sealed class DlgCheckIn : DialogBase
             if (name.Length == 0) continue;
             var roomNumber = row.Cells["room"].Value as string ?? "";
             if (!detailOf.TryGetValue(roomNumber, out var detailId)) { Ui.Error(this, $"Khách {name}: chọn phòng."); return; }
-            DateOnly? birth = null;
-            var birthText = (row.Cells["birth"].Value as string ?? "").Trim();
-            if (birthText.Length > 0)
-            {
-                if (!DateOnly.TryParseExact(birthText, "dd/MM/yyyy", out var b)) { Ui.Error(this, $"Khách {name}: ngày sinh không đúng dạng dd/MM/yyyy."); return; }
-                birth = b;
-            }
+            DateOnly? birth = row.Cells["birth"].Value is DateTime d ? DateOnly.FromDateTime(d) : null;
+            if (birth > DateOnly.FromDateTime(DateTime.Today)) { Ui.Error(this, $"Khách {name}: ngày sinh không được sau hôm nay."); return; }
             list.Add(new StayGuestDto(null, detailId, name, birth, Empty(row.Cells["gender"].Value as string),
                 Empty(row.Cells["doctype"].Value as string), Empty(row.Cells["docno"].Value as string),
                 Empty(row.Cells["nation"].Value as string), row.Cells["rep"].Value is true));
