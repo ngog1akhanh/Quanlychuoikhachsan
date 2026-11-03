@@ -93,11 +93,12 @@ public sealed class AccountService(
         await dbContext.SaveChangesAsync(cancellationToken);
 
         var expiresIn = 3600;
-        var token = CreateToken(account, expiresIn);
+        var sessionVersion = await dbContext.Set<MaXacThuc>().Where(x => x.TaiKhoanId == account.Id && x.Loai == "SESSION_VERSION").Select(x => (long?)x.Id).MaxAsync(cancellationToken) ?? 0;
+        var token = CreateToken(account, expiresIn, sessionVersion);
         return new AuthTokenResponse(token, "Bearer", expiresIn, account.KhachHang?.HoTen ?? account.Email ?? account.SoDienThoai!);
     }
 
-    private string CreateToken(TaiKhoan account, int expiresIn)
+    private string CreateToken(TaiKhoan account, int expiresIn, long sessionVersion)
     {
         var key = configuration["Jwt:SigningKey"]
             ?? throw new InvalidOperationException("Jwt:SigningKey is not configured.");
@@ -106,6 +107,8 @@ public sealed class AccountService(
             new(JwtRegisteredClaimNames.Sub, account.Id.ToString()),
             new(ClaimTypes.NameIdentifier, account.Id.ToString()),
             new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new("credential_stamp", Infrastructure.Authentication.SessionValidation.Hash(account.MatKhauHash)),
+            new("session_version", sessionVersion.ToString()),
             new(ClaimTypes.Role, account.LoaiTaiKhoan)
         };
         if (account.Email is not null) claims.Add(new(JwtRegisteredClaimNames.Email, account.Email));

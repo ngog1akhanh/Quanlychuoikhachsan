@@ -1,0 +1,32 @@
+@if (Visible)
+{
+    <div class="overlay" @onclick="Cancel">
+        <div class="dialog" @onclick:stopPropagation="true">
+            <h3>@Title</h3>
+            <div>@if (ChildContent is not null) { @ChildContent } else { <p>@Message</p> }</div>
+            <div class="dialog-actions">
+                <button type="button" class="btn btn-outline" @onclick="Cancel" disabled="@Busy">@CancelText</button>
+                <button type="button" class="btn @ConfirmClass" @onclick="Confirm" disabled="@Busy">
+                    @if (Busy) { <span class="spinner sm"></span> }
+                    @ConfirmText
+                </button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public string Title { get; set; } = "Xác nhận";
+    [Parameter] public string Message { get; set; } = "Bạn có chắc chắn muốn thực hiện thao tác này?";
+    [Parameter] public string ConfirmText { get; set; } = "Đồng ý";
+    [Parameter] public string CancelText { get; set; } = "Hủy bỏ";
+    [Parameter] public string ConfirmClass { get; set; } = "btn-primary";
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+    [Parameter] public EventCallback OnConfirm { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private Task Confirm() => OnConfirm.InvokeAsync();
+    private Task Cancel() => Busy ? Task.CompletedTask : OnCancel.InvokeAsync();
+}

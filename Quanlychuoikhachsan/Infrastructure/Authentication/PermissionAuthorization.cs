@@ -72,7 +72,7 @@ public sealed class PermissionAuthorizationHandler(HotelDbContext dbContext)
         }
 
         var hasPermission = await dbContext.TaiKhoanVaiTros
-            .Where(accountRole => accountRole.TaiKhoanId == accountId)
+            .Where(accountRole => accountRole.TaiKhoanId == accountId && accountRole.TaiKhoan.TrangThai == "HOAT_DONG" && accountRole.VaiTro.TrangThai == "HOAT_DONG")
             .Join(dbContext.VaiTroQuyens,
                 accountRole => accountRole.VaiTroId,
                 rolePermission => rolePermission.VaiTroId,

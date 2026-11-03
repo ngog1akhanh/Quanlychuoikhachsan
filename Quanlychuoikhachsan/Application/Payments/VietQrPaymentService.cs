@@ -30,10 +30,10 @@ public sealed class VietQrPaymentService(
             item => item.Id == invoiceId, cancellationToken)
             ?? throw new ResourceNotFoundException("Room invoice was not found.");
         if (!await dbContext.DatPhongs.AnyAsync(
-            booking => booking.Id == invoice.DatPhongId && booking.TaiKhoanTaoId == accountId,
+            booking => booking.Id == invoice.DatPhongId && booking.KhachHang.TaiKhoanId == accountId,
             cancellationToken))
             throw new ResourceNotFoundException("Room invoice was not found.");
-        if (invoice.TrangThai is "DA_HUY" or "DA_THANH_TOAN")
+        if (invoice.TrangThai is not ("DA_PHAT_HANH" or "TT_MOT_PHAN"))
             throw new InvalidArgumentException("The invoice is not payable in its current state.");
 
         // Không tạo QR khác nếu QR cũ chưa được đối soát; trạng thái hủy cục bộ không hủy QR phía VietQR.
@@ -165,7 +165,7 @@ public sealed class VietQrPaymentService(
         var paidAt = DateTime.UtcNow;
         dbContext.ThanhToanHoaDonPhongs.Add(new ThanhToanHoaDonPhong
         {
-            MaThanhToan = $"TT{Guid.NewGuid():N}"[..40],
+            MaThanhToan = $"TT{Guid.NewGuid():N}",
             HoaDonPhongId = invoice.Id,
             PhuongThucId = method.Id,
             SoTien = paymentOrder.SoTien,

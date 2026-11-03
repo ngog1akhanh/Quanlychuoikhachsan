@@ -1,0 +1,151 @@
+@page "/rooms"
+@implements IDisposable
+@inject RoomService RoomSvc
+@inject BookingState State
+@inject NavigationManager Nav
+
+<PageTitle>Tìm phòng – @HotelInfo.Name</PageTitle>
+
+<div class="container section">
+    <RoomSearchForm Query="_form" OnSearch="SearchAsync" Busy="_loading" Compact="true" />
+
+    @if (_loading)
+    {
+        <Loading Message="Đang tìm phòng trống..." />
+    }
+    else if (_error is not null)
+    {
+        <div class="alert alert-danger">@_error</div>
+    }
+    else if (State.HasSearched)
+    {
+        <div class="results-head">
+            <h2>@Filtered.Count phòng trống</h2>
+            <span class="muted">@Fmt.Date(State.Query.CheckIn) → @Fmt.Date(State.Query.CheckOut) · @State.Query.Nights đêm · @State.Query.Adults người lớn@(State.Query.Children > 0 ? $", {State.Query.Children} trẻ em" : "")</span>
+        </div>
+
+        <RoomFilter Rooms="State.Results" Filter="_filter" FilterChanged="OnFilterChanged" />
+
+        @if (Filtered.Count == 0)
+        {
+            <div class="empty">Không có phòng phù hợp. Hãy thử đổi ngày, số khách hoặc bộ lọc.</div>
+        }
+        else
+        {
+            <div class="room-grid">
+                @foreach (var r in PageItems)
+                {
+                    <RoomCard Room="r"
+                              Nights="State.Query.Nights"
+                              Selected="State.IsSelected(r.Id)"
+                              DetailHref="@DetailUrl(r)"
+                              OnToggle="OnToggle" />
+                }
+            </div>
+            <Pagination Page="_page" TotalPages="TotalPages" PageChanged="OnPageChanged" />
+        }
+    }
+</div>
+
+@if (State.SelectedCount > 0)
+{
+    <div class="cart-bar">
+        <div class="container">
+            <span>Đã chọn <b>@State.SelectedCount phòng</b> · @State.Query.Nights đêm · tạm tính <b>@Fmt.Money(State.EstimatedTotal)</b></span>
+            <span>
+                <button type="button" class="btn btn-outline btn-sm" @onclick="State.ClearSelection">Bỏ chọn tất cả</button>
+                <a class="btn btn-primary" href="checkout">Đặt phòng đã chọn →</a>
+            </span>
+        </div>
+    </div>
+}
+
+@code {
+    private const int PageSize = 9;
+
+    [SupplyParameterFromQuery(Name = "checkIn")] public string? CheckInText { get; set; }
+    [SupplyParameterFromQuery(Name = "checkOut")] public string? CheckOutText { get; set; }
+    [SupplyParameterFromQuery(Name = "adults")] public int? AdultsValue { get; set; }
+    [SupplyParameterFromQuery(Name = "children")] public int? ChildrenValue { get; set; }
+    [SupplyParameterFromQuery(Name = "type")] public string? TypeCode { get; set; }
+
+    private RoomSearchQuery _form = new();
+    private readonly RoomFilterState _filter = new();
+    private bool _loading;
+    private string? _error;
+    private int _page = 1;
+
+    private List<PublicRoom> Filtered => Apply(State.Results);
+    private int TotalPages => (int)Math.Ceiling(Filtered.Count / (double)PageSize);
+    private IEnumerable<PublicRoom> PageItems => Filtered.Skip((_page - 1) * PageSize).Take(PageSize);
+
+    protected override void OnInitialized() => State.Changed += OnStateChanged;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        var hasUrlQuery = CheckInText is not null || CheckOutText is not null;
+        var q = hasUrlQuery ? RoomSearchQuery.FromUrl(CheckInText, CheckOutText, AdultsValue, ChildrenValue) : State.Query.Clone();
+
+        if (q.CheckIn < DateOnly.FromDateTime(DateTime.Today))
+        {
+            // Link cũ có ngày quá khứ → dời về mặc định
+            q = new RoomSearchQuery { Adults = q.Adults, Children = q.Children };
+        }
+
+        _form = q.Clone();
+        if (!string.IsNullOrEmpty(TypeCode)) _filter.RoomTypeCode = TypeCode;
+
+        // Chỉ gọi API khi chưa tìm hoặc điều kiện đổi
+        if (!State.HasSearched || !State.Query.SameAs(q))
+            await RunSearchAsync(q);
+    }
+
+    private async Task RunSearchAsync(RoomSearchQuery q)
+    {
+        _loading = true;
+        _error = null;
+        _page = 1;
+        try
+        {
+            var rooms = await RoomSvc.SearchAvailableAsync(q);
+            State.SetResults(q, rooms);
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    // Người dùng bấm "Tìm phòng": cập nhật URL để có thể chia sẻ / F5
+    private Task SearchAsync(RoomSearchQuery q)
+    {
+        Nav.NavigateTo("rooms?" + q.ToQueryString());
+        return Task.CompletedTask;
+    }
+
+    private List<PublicRoom> Apply(IEnumerable<PublicRoom> src)
+    {
+        var q = src.Where(r =>
+            (string.IsNullOrEmpty(_filter.RoomTypeCode) || r.RoomTypeCode == _filter.RoomTypeCode) &&
+            (string.IsNullOrEmpty(_filter.ViewType) || r.ViewType == _filter.ViewType) &&
+            (_filter.MaxPrice <= 0 || r.UnitPrice <= _filter.MaxPrice));
+
+        var sorted = _filter.Sort == "price_desc"
+     ? q.OrderByDescending(r => r.UnitPrice)
+     : q.OrderBy(r => r.UnitPrice);
+        return sorted.ThenBy(r => r.RoomNumber).ToList();
+    }
+
+    private string DetailUrl(PublicRoom r) => $"rooms/{r.Id}?{State.Query.ToQueryString()}";
+
+    private void OnFilterChanged() => _page = 1;
+    private void OnPageChanged(int p) => _page = p;
+    private void OnToggle(PublicRoom r) => State.Toggle(r);
+    private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnStateChanged;
+}

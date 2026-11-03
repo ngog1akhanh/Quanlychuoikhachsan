@@ -55,7 +55,7 @@ public sealed record ConfirmDepositRequest(
     long PaymentMethodId,
     decimal Amount,
     [param: Required] string PaymentGateway,
-    [param: Required] string TransactionId);
+    [param: Required] string TransactionId, long? ShiftId = null);
 
 // Frontend sends these fields in snake_case; query metadata remains camelCase.
 public sealed record CheckInRequest(long EmployeeId);
@@ -63,7 +63,7 @@ public sealed record CheckOutRequest(long EmployeeId, decimal EarlyOrLateSurchar
 public sealed record CancelBookingRequest(string Reason);
 public sealed record ApproveCancellationRequest(long EmployeeId, decimal ApprovedRefund, string? Note = null);
 public sealed record MarkNoShowRequest(long EmployeeId, string? Note = null);
-public sealed record AddInvoicePaymentRequest(long PaymentMethodId, decimal Amount, long? EmployeeId, string? PaymentGateway, string? TransactionId);
+public sealed record AddInvoicePaymentRequest(long PaymentMethodId, decimal Amount, long? EmployeeId, string? PaymentGateway, string? TransactionId, long? ShiftId = null);
 public sealed record InvoiceResponse(long Id, string Name, long BookingId, decimal RoomAmount, decimal Surcharge, decimal Compensation, decimal Vat, decimal Total, decimal DepositApplied, decimal Paid, decimal Due, string Status);
 public sealed record PageResponse<T>(IReadOnlyList<T> Items, string? NextPageToken);
 public sealed record PageQuery(int PageSize = 20, string? PageToken = null);

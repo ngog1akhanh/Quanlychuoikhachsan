@@ -361,3 +361,5 @@ MigrationBackup/
 
 # Fody - auto-generated XML schema
 FodyWeavers.xsd
+# Bản giải nén đối chiếu và công cụ tích hợp tạm
+/review/

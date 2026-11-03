@@ -1,0 +1,72 @@
+<div class="search-box @(Compact ? "search-compact" : "")">
+    <div class="search-grid">
+        <div class="form-group">
+            <label class="form-label">Nhận phòng</label>
+            <input type="date" class="form-control" min="@Today" value="@Query.CheckIn.ToString("yyyy-MM-dd")" @onchange="OnCheckInChanged" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Trả phòng</label>
+            <input type="date" class="form-control" min="@Query.CheckIn.AddDays(1).ToString("yyyy-MM-dd")" value="@Query.CheckOut.ToString("yyyy-MM-dd")" @onchange="OnCheckOutChanged" />
+        </div>
+        <div class="form-group">
+            <label class="form-label">Người lớn</label>
+            <select class="form-control" @bind="Query.Adults">
+                @for (var i = 1; i <= 8; i++) { <option value="@i">@i</option> }
+            </select>
+        </div>
+        <div class="form-group">
+            <label class="form-label">Trẻ em</label>
+            <select class="form-control" @bind="Query.Children">
+                @for (var i = 0; i <= 5; i++) { <option value="@i">@i</option> }
+            </select>
+        </div>
+        <button type="button" class="btn btn-primary btn-lg" @onclick="SubmitAsync" disabled="@Busy">
+            @if (Busy) { <span class="spinner sm"></span> }
+            Tìm phòng
+        </button>
+    </div>
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="search-error">@_error</div>
+    }
+    <div class="muted small mt-1">@Query.Nights đêm · nhận phòng từ @HotelInfo.CheckInTime, trả phòng trước @HotelInfo.CheckOutTime</div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public RoomSearchQuery Query { get; set; } = new();
+    [Parameter] public EventCallback<RoomSearchQuery> OnSearch { get; set; }
+    [Parameter] public bool Busy { get; set; }
+    [Parameter] public bool Compact { get; set; }
+
+    private string? _error;
+    private static string Today => DateTime.Today.ToString("yyyy-MM-dd");
+
+    private void OnCheckInChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", out var d))
+        {
+            Query.CheckIn = d;
+            if (Query.CheckOut <= d) Query.CheckOut = d.AddDays(1);
+        }
+    }
+
+    private void OnCheckOutChanged(ChangeEventArgs e)
+    {
+        if (DateOnly.TryParseExact(e.Value?.ToString(), "yyyy-MM-dd", out var d))
+            Query.CheckOut = d;
+    }
+
+    private async Task SubmitAsync()
+    {
+        _error = null;
+        if (Query.CheckIn < DateOnly.FromDateTime(DateTime.Today))
+            _error = "Ngày nhận phòng không được ở quá khứ.";
+        else if (Query.CheckOut <= Query.CheckIn)
+            _error = "Ngày trả phòng phải sau ngày nhận phòng.";
+        else if (Query.Nights > 30)
+            _error = "Thời gian lưu trú tối đa 30 đêm.";
+
+        if (_error is null)
+            await OnSearch.InvokeAsync(Query);
+    }
+}

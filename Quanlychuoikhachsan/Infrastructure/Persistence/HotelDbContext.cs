@@ -33,7 +33,6 @@ public sealed class HotelDbContext(DbContextOptions<HotelDbContext> options) : D
     public DbSet<ApDungCocHoaDon> ApDungCocHoaDons => Set<ApDungCocHoaDon>();
     public DbSet<ThanhToanHoaDonPhong> ThanhToanHoaDonPhongs => Set<ThanhToanHoaDonPhong>();
     public DbSet<YeuCauThanhToanVietQr> YeuCauThanhToanVietQrs => Set<YeuCauThanhToanVietQr>();
-    public DbSet<Quanlychuoikhachsan.Application.Reports.ReportService.ServiceInvoice> ServiceInvoices => Set<Quanlychuoikhachsan.Application.Reports.ReportService.ServiceInvoice>();
     public DbSet<Kho> Khos => Set<Kho>();
     public DbSet<DanhMucHangHoa> DanhMucHangHoas => Set<DanhMucHangHoa>();
     public DbSet<NhaCungCap> NhaCungCaps => Set<NhaCungCap>();
@@ -53,6 +52,7 @@ public sealed class HotelDbContext(DbContextOptions<HotelDbContext> options) : D
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+        OperationalModel.Configure(modelBuilder);
         modelBuilder.UseCollation("utf8mb4_unicode_ci");
         // Tách ánh xạ theo phân hệ để khớp tên bảng/cột của script MySQL.
         ConfigureAccount(modelBuilder);
@@ -62,7 +62,6 @@ public sealed class HotelDbContext(DbContextOptions<HotelDbContext> options) : D
         ConfigurePayment(modelBuilder);
         ConfigureBilling(modelBuilder);
         ConfigureVietQrPaymentOrders(modelBuilder);
-        modelBuilder.Entity<Quanlychuoikhachsan.Application.Reports.ReportService.ServiceInvoice>(e => { e.HasNoKey(); e.ToView("hoa_don_dich_vu"); e.Property(x => x.Id).HasColumnName("id"); e.Property(x => x.Date).HasColumnName("ngay_lap"); e.Property(x => x.Total).HasColumnName("tong_tien"); e.Property(x => x.Status).HasColumnName("trang_thai"); });
         ConfigureInventory(modelBuilder);
         modelBuilder.Entity<NhatKyHeThong>(e =>
         {

@@ -106,8 +106,32 @@ public sealed class VietQrGateway(
         return request;
     }
 
-    // Lấy access token bằng cặp thông tin Basic Authentication của tài khoản sandbox.
+    // Token dùng lại cho nhiều lần gọi (kể cả job nền kiểm tra mỗi phút), làm mới trước khi hết hạn 1 phút.
+    private static readonly SemaphoreSlim TokenLock = new(1, 1);
+    private static (string User, string Token, DateTime ExpiresAt)? cachedToken;
+
     private async Task<string> GetAccessTokenAsync(HttpClient client, CancellationToken cancellationToken)
+    {
+        if (cachedToken is { } cached && cached.User == vietQrSettings.Username && cached.ExpiresAt > DateTime.UtcNow)
+            return cached.Token;
+        await TokenLock.WaitAsync(cancellationToken);
+        try
+        {
+            if (cachedToken is { } again && again.User == vietQrSettings.Username && again.ExpiresAt > DateTime.UtcNow)
+                return again.Token;
+            var (token, expiresIn) = await RequestAccessTokenAsync(client, cancellationToken);
+            var lifetime = TimeSpan.FromSeconds(expiresIn > 120 ? expiresIn - 60 : 60);
+            cachedToken = (vietQrSettings.Username, token, DateTime.UtcNow.Add(lifetime));
+            return token;
+        }
+        finally
+        {
+            TokenLock.Release();
+        }
+    }
+
+    // Lấy access token bằng cặp thông tin Basic Authentication của tài khoản sandbox.
+    private async Task<(string Token, int ExpiresIn)> RequestAccessTokenAsync(HttpClient client, CancellationToken cancellationToken)
     {
         var credentials = Convert.ToBase64String(
             Encoding.UTF8.GetBytes($"{vietQrSettings.Username}:{vietQrSettings.Password}"));
@@ -125,7 +149,7 @@ public sealed class VietQrGateway(
             throw new ServiceUnavailableException("VietQR sandbox authentication failed.");
         }
 
-        return response.AccessToken;
+        return (response.AccessToken, response.ExpiresIn);
     }
 
     // Chuẩn hóa lỗi HTTP, timeout và JSON thành lỗi dịch vụ ổn định cho API.

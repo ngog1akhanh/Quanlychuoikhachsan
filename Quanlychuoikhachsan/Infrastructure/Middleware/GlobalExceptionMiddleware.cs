@@ -110,7 +110,10 @@ public sealed class GlobalExceptionMiddleware(
             return (StatusCodes.Status403Forbidden, "PERMISSION_DENIED", exception.Message, []);
         }
 
-        if (exception is DbUpdateException updateException && FindMySqlException(updateException) is { } mysqlException)
+        if (exception is DbUpdateConcurrencyException)
+            return (StatusCodes.Status409Conflict, "ABORTED", "The resource changed. Reload and retry.", []);
+
+        if (FindMySqlException(exception) is { } mysqlException)
         {
             return mysqlException.Number switch
             {

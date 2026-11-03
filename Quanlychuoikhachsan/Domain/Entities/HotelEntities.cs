@@ -283,6 +283,10 @@ public sealed class Phong : EntityBase
 
 public sealed class DatPhong : EntityBase
 {
+    [System.ComponentModel.DataAnnotations.Schema.Column("chinh_sach_coc_id")]
+    public long? ChinhSachCocId { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.Column("chinh_sach_huy_id")]
+    public long? ChinhSachHuyId { get; set; }
     public string MaDatPhong { get; set; } = null!;
     public long KhachHangId { get; set; }
     public long? TaiKhoanTaoId { get; set; }

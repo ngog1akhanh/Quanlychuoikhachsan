@@ -1,0 +1,82 @@
+@page "/register"
+@inject AuthService AuthSvc
+@inject NavigationManager Nav
+
+<PageTitle>Đăng ký – @HotelInfo.Name</PageTitle>
+
+<div class="container">
+    <div class="auth-wrap">
+        <div class="card auth-card">
+            <h1>Tạo tài khoản</h1>
+            <p class="muted text-center">Nhập email hoặc số điện thoại (ít nhất một trong hai).</p>
+
+            @if (!string.IsNullOrEmpty(_error))
+            {
+                <div class="alert alert-danger">@_error</div>
+            }
+
+            <EditForm Model="_model" OnValidSubmit="SubmitAsync" FormName="register">
+                <DataAnnotationsValidator />
+                <div class="form-group">
+                    <label class="form-label">Họ và tên *</label>
+                    <InputText class="form-control" @bind-Value="_model.FullName" />
+                    <ValidationMessage For="() => _model.FullName" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Email</label>
+                    <InputText class="form-control" @bind-Value="_model.Email" />
+                    <ValidationMessage For="() => _model.Email" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Số điện thoại</label>
+                    <InputText class="form-control" @bind-Value="_model.PhoneNumber" />
+                    <ValidationMessage For="() => _model.PhoneNumber" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Mật khẩu * (tối thiểu 8 ký tự)</label>
+                    <InputText type="password" class="form-control" @bind-Value="_model.Password" autocomplete="new-password" />
+                    <ValidationMessage For="() => _model.Password" />
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Nhập lại mật khẩu *</label>
+                    <InputText type="password" class="form-control" @bind-Value="_model.ConfirmPassword" autocomplete="new-password" />
+                    <ValidationMessage For="() => _model.ConfirmPassword" />
+                </div>
+                <button type="submit" class="btn btn-primary btn-lg btn-block" disabled="@_busy">
+                    @if (_busy) { <span class="spinner sm"></span> }
+                    Đăng ký
+                </button>
+            </EditForm>
+
+            <div class="auth-links">
+                <span></span>
+                <a href="login">Đã có tài khoản? Đăng nhập</a>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    private readonly RegisterRequest _model = new();
+    private bool _busy;
+    private string? _error;
+
+    private async Task SubmitAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            await AuthSvc.RegisterAsync(_model);
+            Nav.NavigateTo("login");
+        }
+        catch (ApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+}

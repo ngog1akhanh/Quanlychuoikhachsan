@@ -16,9 +16,7 @@ public interface IInventoryService
     Task<IssueResponse> ConfirmIssueAsync(long id, CancellationToken cancellationToken);
     Task<StockBalanceResponse> GetBalanceAsync(long warehouseId, long itemId, CancellationToken cancellationToken);
 }
-
-/// <summary>Qu?n lý m?t hàng và ghi bi?n ??ng nh?p xu?t ?? tính t?n kho.</summary>
-public sealed class InventoryService(HotelDbContext db) : IInventoryService
+public sealed partial class InventoryService(HotelDbContext db, CurrentActor actor) : IInventoryService
 {
     public async Task<IReadOnlyList<InventoryItemResponse>> ListItemsAsync(CancellationToken ct)
     {
@@ -28,6 +26,7 @@ public sealed class InventoryService(HotelDbContext db) : IInventoryService
 
     public async Task<InventoryItemResponse> CreateItemAsync(CreateInventoryItemRequest r, CancellationToken ct)
     {
+        await ValidateItemAsync(r, ct);
         if (r.ReferenceCost < 0 || r.MinimumStock < 0 || (r.TrackExpiry && !r.TrackLot) || (r.TrackIndividual && r.Type != "TAI_SAN")) throw new InvalidArgumentException("Inventory item tracking flags violate K1 constraints.");
         if (await db.DanhMucHangHoas.AnyAsync(x => x.MaHang == r.Code, ct)) throw new AlreadyExistsException("The inventory item code already exists.");
         var item = new DanhMucHangHoa { MaHang = r.Code, TenHang = r.Name, LoaiHang = r.Type, DonViTinhId = r.UnitId, NhomHangId = r.GroupId, GiaVonThamChieu = r.ReferenceCost, MucTonToiThieu = r.MinimumStock, TheoDoiLo = r.TrackLot, TheoDoiHanSuDung = r.TrackExpiry, TheoDoiCaThe = r.TrackIndividual, DieuKienBaoQuan = r.StorageCondition, MoTa = r.Description, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow };
@@ -37,18 +36,20 @@ public sealed class InventoryService(HotelDbContext db) : IInventoryService
 
     public async Task<PurchaseResponse> CreatePurchaseAsync(CreatePurchaseRequest r, CancellationToken ct)
     {
+        var employeeId = await actor.EmployeeIdAsync(ct);
+        await ValidatePurchaseAsync(r.SupplierId, r.WarehouseId, r.Discount, r.Tax, r.Lines, r.Note, ct);
         if (r.Lines is null || r.Lines.Count == 0) throw new InvalidArgumentException("A purchase order cannot be empty.");
-        var lines = r.Lines.Select(x => new ChiTietPhieuNhap { DanhMucHangHoaId = x.ItemId, SoLuong = x.Quantity, DonGiaNhap = x.UnitPrice, ThanhTien = decimal.Round(x.Quantity * x.UnitPrice, 2) }).ToList();
+        var lines = r.Lines.Select(x => new ChiTietPhieuNhap { DanhMucHangHoaId = x.ItemId, SoLuong = x.Quantity, DonGiaNhap = x.UnitPrice, ThanhTien = Input.Round(x.Quantity * x.UnitPrice) }).ToList();
         if (lines.Any(x => x.SoLuong <= 0 || x.DonGiaNhap < 0)) throw new InvalidArgumentException("Purchase quantities must be positive and prices cannot be negative.");
-        var order = new PhieuNhap { MaPhieuNhap = $"PN{Guid.NewGuid():N}"[..40], NhaCungCapId = r.SupplierId, KhoId = r.WarehouseId, NhanVienTaoId = r.EmployeeId, NgayNhap = DateTime.UtcNow, TongTienHang = lines.Sum(x => x.ThanhTien), ChietKhau = r.Discount, TienThue = r.Tax, TongThanhToan = lines.Sum(x => x.ThanhTien) - r.Discount + r.Tax, GhiChu = r.Note, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, ChiTiet = lines };
+        var order = new PhieuNhap { MaPhieuNhap = $"PN{Guid.NewGuid():N}", NhaCungCapId = r.SupplierId, KhoId = r.WarehouseId, NhanVienTaoId = employeeId, NgayNhap = DateTime.UtcNow, TongTienHang = lines.Sum(x => x.ThanhTien), ChietKhau = r.Discount, TienThue = r.Tax, TongThanhToan = lines.Sum(x => x.ThanhTien) - r.Discount + r.Tax, GhiChu = r.Note, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, ChiTiet = lines };
         db.PhieuNhaps.Add(order); await db.SaveChangesAsync(ct); return new(order.Id, $"purchase-orders/{order.Id}", order.TrangThai, order.TongThanhToan);
     }
-
-    // Xác nh?n nh?p trong transaction, t?o lô và bút toán t?ng t?n khi c?n.
     public async Task<PurchaseResponse> ConfirmPurchaseAsync(long id, ConfirmPurchaseRequest request, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await LockPurchaseAsync(id, ct);
         var order = await db.PhieuNhaps.Include(x => x.ChiTiet).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException($"Purchase order {id} was not found.");
+        order.NhanVienXacNhanId = await actor.EmployeeIdAsync(ct);
         if (order.TrangThai != "NHAP") throw new InvalidArgumentException("Only a draft purchase order can be confirmed.");
         if (order.ChiTiet.Count == 0) throw new InvalidArgumentException("A purchase order cannot be empty.");
         var expected = order.ChiTiet.Sum(x => x.ThanhTien);
@@ -57,6 +58,9 @@ public sealed class InventoryService(HotelDbContext db) : IInventoryService
         var confirmations = request.Lines.ToDictionary(x => x.DetailId);
         var itemIds = order.ChiTiet.Select(x => x.DanhMucHangHoaId).ToArray();
         var items = await db.DanhMucHangHoas.Where(x => itemIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
+        if (!order.ChiTiet.Select(x => x.Id).ToHashSet().SetEquals(confirmations.Keys))
+            throw new InvalidArgumentException("Receiving allocations must belong to this purchase order.");
+        await ValidateReceivingAsync(order, items, confirmations, ct);
         foreach (var line in order.ChiTiet)
         {
             var item = items[line.DanhMucHangHoaId];
@@ -65,26 +69,28 @@ public sealed class InventoryService(HotelDbContext db) : IInventoryService
             long? lotId = null;
             if (item.TheoDoiLo)
             {
-                var lot = new LoHang { MaLo = allocation.LotCode ?? $"AUTO-{line.Id}", DanhMucHangHoaId = item.Id, ChiTietPhieuNhapId = line.Id, KhoId = order.KhoId, NgaySanXuat = allocation.ManufactureDate, HanSuDung = allocation.ExpiryDate, SoLuongBanDau = line.SoLuong, DonGiaNhap = line.DonGiaNhap, CreatedAt = DateTime.UtcNow };
+                var lot = new LoHang { MaLo = allocation.LotCode?.Trim() ?? $"AUTO-{line.Id}", DanhMucHangHoaId = item.Id, ChiTietPhieuNhapId = line.Id, KhoId = order.KhoId, NgaySanXuat = allocation.ManufactureDate, HanSuDung = allocation.ExpiryDate, SoLuongBanDau = line.SoLuong, DonGiaNhap = line.DonGiaNhap, CreatedAt = DateTime.UtcNow };
                 db.LoHangs.Add(lot); await db.SaveChangesAsync(ct); lotId = lot.Id;
             }
-            db.GiaoDichKhos.Add(new GiaoDichKho { MaGiaoDich = $"NK{Guid.NewGuid():N}"[..50], KhoId = order.KhoId, DanhMucHangHoaId = line.DanhMucHangHoaId, LoHangId = lotId, PhieuNhapId = order.Id, ChiTietPhieuNhapId = line.Id, NhanVienId = order.NhanVienXacNhanId, LoaiGiaoDich = "NHAP", SoLuongThayDoi = line.SoLuong, ThoiGian = DateTime.UtcNow });
+            db.GiaoDichKhos.Add(new GiaoDichKho { MaGiaoDich = $"NK{Guid.NewGuid():N}", KhoId = order.KhoId, DanhMucHangHoaId = line.DanhMucHangHoaId, LoHangId = lotId, PhieuNhapId = order.Id, ChiTietPhieuNhapId = line.Id, NhanVienId = order.NhanVienXacNhanId, LoaiGiaoDich = "NHAP", SoLuongThayDoi = line.SoLuong, ThoiGian = DateTime.UtcNow });
             if (item.TheoDoiCaThe)
             {
                 if (allocation.Serials is not null && allocation.Serials.Count != (int)line.SoLuong) throw new InvalidArgumentException("Asset serial count must equal the received quantity.");
-                for (var i = 0; i < line.SoLuong; i++) db.TaiSanCaThes.Add(new TaiSanCaThe { MaTaiSan = $"TS{Guid.NewGuid():N}"[..40], SoSerial = allocation.Serials?[i], DanhMucHangHoaId = item.Id, ChiTietPhieuNhapId = line.Id, KhoId = order.KhoId, GiaMua = line.DonGiaNhap, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
+                for (var i = 0; i < line.SoLuong; i++) db.TaiSanCaThes.Add(new TaiSanCaThe { MaTaiSan = $"TS{Guid.NewGuid():N}", SoSerial = allocation.Serials?[i].Trim(), DanhMucHangHoaId = item.Id, ChiTietPhieuNhapId = line.Id, KhoId = order.KhoId, GiaMua = line.DonGiaNhap, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow });
             }
         }
-        order.TrangThai = "DA_XAC_NHAN"; order.XacNhanLuc = DateTime.UtcNow; await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return new(order.Id, $"purchase-orders/{order.Id}", order.TrangThai, order.TongThanhToan);
+        order.TrangThai = "DA_XAC_NHAN"; order.XacNhanLuc = order.UpdatedAt = DateTime.UtcNow; await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return new(order.Id, $"purchase-orders/{order.Id}", order.TrangThai, order.TongThanhToan);
     }
 
-    public async Task<IssueResponse> CreateIssueAsync(CreateIssueRequest r, CancellationToken ct) { if (r.Lines is null || r.Lines.Count == 0) throw new InvalidArgumentException("A stock issue cannot be empty."); var issue = new PhieuXuat { MaPhieuXuat = $"PX{Guid.NewGuid():N}"[..40], KhoId = r.WarehouseId, NhanVienTaoId = r.EmployeeId, MucDich = r.Purpose, NguoiNhan = r.Recipient, LyDo = r.Reason, NgayXuat = DateTime.UtcNow, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, ChiTiet = r.Lines.Select(x => new ChiTietPhieuXuat { DanhMucHangHoaId = x.ItemId, SoLuong = x.Quantity }).ToList() }; db.PhieuXuats.Add(issue); await db.SaveChangesAsync(ct); return new(issue.Id, $"stock-issues/{issue.Id}", issue.TrangThai); }
-
-    // Xác nh?n xu?t sau khi ki?m tra s? d? kh? d?ng và ghi bút toán gi?m t?n.
+    public async Task<IssueResponse> CreateIssueAsync(CreateIssueRequest r, CancellationToken ct) { var employeeId = await actor.EmployeeIdAsync(ct); await ValidateIssueAsync(r, ct); if (r.Lines is null || r.Lines.Count == 0) throw new InvalidArgumentException("A stock issue cannot be empty."); var issue = new PhieuXuat { MaPhieuXuat = $"PX{Guid.NewGuid():N}", KhoId = r.WarehouseId, NhanVienTaoId = employeeId, MucDich = r.Purpose, NguoiNhan = r.Recipient, LyDo = r.Reason, NgayXuat = DateTime.UtcNow, CreatedAt = DateTime.UtcNow, UpdatedAt = DateTime.UtcNow, ChiTiet = r.Lines.Select(x => new ChiTietPhieuXuat { DanhMucHangHoaId = x.ItemId, SoLuong = x.Quantity }).ToList() }; db.PhieuXuats.Add(issue); await db.SaveChangesAsync(ct); return new(issue.Id, $"stock-issues/{issue.Id}", issue.TrangThai); }
     public async Task<IssueResponse> ConfirmIssueAsync(long id, CancellationToken ct)
     {
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        await LockIssueAsync(id, ct);
         var issue = await db.PhieuXuats.Include(x => x.ChiTiet).SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException($"Stock issue {id} was not found.");
+        issue.NhanVienXacNhanId = await actor.EmployeeIdAsync(ct);
+        if (issue.ChiTiet.Count == 0 || issue.ChiTiet.Any(x => x.SoLuong <= 0)) throw new InvalidArgumentException("A stock issue must contain positive quantities.");
+        await LockWarehouseAsync(issue.KhoId, ct);
         if (issue.TrangThai != "NHAP") throw new InvalidArgumentException("Only a draft stock issue can be confirmed.");
         var itemIds = issue.ChiTiet.Select(x => x.DanhMucHangHoaId).ToArray();
         var items = await db.DanhMucHangHoas.Where(x => itemIds.Contains(x.Id)).ToDictionaryAsync(x => x.Id, ct);
@@ -99,6 +105,7 @@ public sealed class InventoryService(HotelDbContext db) : IInventoryService
         {
             if (!items.TryGetValue(itemId, out var item))
                 throw new ResourceNotFoundException($"Inventory item {itemId} was not found.");
+            if (item.TheoDoiCaThe || item.TrangThai != "HOAT_DONG") throw new InvalidArgumentException("Use asset transfers for individual assets; inactive items cannot be issued.");
             if (!itemBalances.TryGetValue(itemId, out var available) || available < demand)
                 throw new AlreadyExistsException("Insufficient available stock for the stock issue.");
         }
@@ -110,6 +117,7 @@ public sealed class InventoryService(HotelDbContext db) : IInventoryService
         {
             var lots = await db.LoHangs
                 .Where(x => x.KhoId == issue.KhoId && x.DanhMucHangHoaId == item.Id &&
+                    (x.TrangThai == "CON_HAN" || x.TrangThai == "SAP_HET_HAN") &&
                     (x.HanSuDung == null || x.HanSuDung >= today))
                 .OrderBy(x => x.HanSuDung == null)
                 .ThenBy(x => x.HanSuDung)
@@ -135,16 +143,16 @@ public sealed class InventoryService(HotelDbContext db) : IInventoryService
                 {
                     var take = Math.Min(remaining, Math.Max(0, lotBalances[lot.Id]));
                     if (take <= 0) continue;
-                    db.GiaoDichKhos.Add(new GiaoDichKho { MaGiaoDich = $"XK{Guid.NewGuid():N}"[..50], KhoId = issue.KhoId, DanhMucHangHoaId = item.Id, LoHangId = lot.Id, PhieuXuatId = issue.Id, ChiTietPhieuXuatId = line.Id, NhanVienId = issue.NhanVienXacNhanId, LoaiGiaoDich = "XUAT", SoLuongThayDoi = -take, ThoiGian = DateTime.UtcNow });
+                    db.GiaoDichKhos.Add(new GiaoDichKho { MaGiaoDich = $"XK{Guid.NewGuid():N}", KhoId = issue.KhoId, DanhMucHangHoaId = item.Id, LoHangId = lot.Id, PhieuXuatId = issue.Id, ChiTietPhieuXuatId = line.Id, NhanVienId = issue.NhanVienXacNhanId, LoaiGiaoDich = "XUAT", SoLuongThayDoi = -take, ThoiGian = DateTime.UtcNow });
                     lotBalances[lot.Id] -= take;
                     remaining -= take;
                     if (remaining <= 0) break;
                 }
                 if (remaining > 0) throw new AlreadyExistsException("Insufficient non-expired lot stock for FEFO issue.");
             }
-            else db.GiaoDichKhos.Add(new GiaoDichKho { MaGiaoDich = $"XK{Guid.NewGuid():N}"[..50], KhoId = issue.KhoId, DanhMucHangHoaId = item.Id, PhieuXuatId = issue.Id, ChiTietPhieuXuatId = line.Id, NhanVienId = issue.NhanVienXacNhanId, LoaiGiaoDich = "XUAT", SoLuongThayDoi = -line.SoLuong, ThoiGian = DateTime.UtcNow });
+            else db.GiaoDichKhos.Add(new GiaoDichKho { MaGiaoDich = $"XK{Guid.NewGuid():N}", KhoId = issue.KhoId, DanhMucHangHoaId = item.Id, PhieuXuatId = issue.Id, ChiTietPhieuXuatId = line.Id, NhanVienId = issue.NhanVienXacNhanId, LoaiGiaoDich = "XUAT", SoLuongThayDoi = -line.SoLuong, ThoiGian = DateTime.UtcNow });
         }
-        issue.TrangThai = "DA_XAC_NHAN"; issue.XacNhanLuc = DateTime.UtcNow; await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return new(issue.Id, $"stock-issues/{issue.Id}", issue.TrangThai);
+        issue.TrangThai = "DA_XAC_NHAN"; issue.XacNhanLuc = issue.UpdatedAt = DateTime.UtcNow; await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return new(issue.Id, $"stock-issues/{issue.Id}", issue.TrangThai);
     }
     public async Task<StockBalanceResponse> GetBalanceAsync(long warehouseId, long itemId, CancellationToken ct) => new(warehouseId, itemId, await db.GiaoDichKhos.Where(x => x.KhoId == warehouseId && x.DanhMucHangHoaId == itemId).SumAsync(x => x.SoLuongThayDoi, ct));
 }
