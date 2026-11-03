@@ -20,29 +20,22 @@
     else if (State.HasSearched)
     {
         <div class="results-head">
-            <h2>@Filtered.Count phòng trống</h2>
+            <h2>Chọn hạng phòng</h2>
             <span class="muted">@Fmt.Date(State.Query.CheckIn) → @Fmt.Date(State.Query.CheckOut) · @State.Query.Nights đêm · @State.Query.Adults người lớn@(State.Query.Children > 0 ? $", {State.Query.Children} trẻ em" : "")</span>
         </div>
 
-        <RoomFilter Rooms="State.Results" Filter="_filter" FilterChanged="OnFilterChanged" />
-
-        @if (Filtered.Count == 0)
+        @if (Groups.Count == 0)
         {
-            <div class="empty">Không có phòng phù hợp. Hãy thử đổi ngày, số khách hoặc bộ lọc.</div>
+            <div class="empty">Không có phòng phù hợp. Hãy thử đổi ngày, số khách.</div>
         }
         else
         {
-            <div class="room-grid">
-                @foreach (var r in PageItems)
+            <div class="room-type-grid">
+                @foreach (var group in Groups)
                 {
-                    <RoomCard Room="r"
-                              Nights="State.Query.Nights"
-                              Selected="State.IsSelected(r.Id)"
-                              DetailHref="@DetailUrl(r)"
-                              OnToggle="OnToggle" />
+                    <RoomTypeCard @key="group[0].RoomTypeCode" Rooms="group" Query="State.Query" State="State" />
                 }
             </div>
-            <Pagination Page="_page" TotalPages="TotalPages" PageChanged="OnPageChanged" />
         }
     }
 </div>
@@ -61,7 +54,6 @@
 }
 
 @code {
-    private const int PageSize = 9;
 
     [SupplyParameterFromQuery(Name = "checkIn")] public string? CheckInText { get; set; }
     [SupplyParameterFromQuery(Name = "checkOut")] public string? CheckOutText { get; set; }
@@ -70,14 +62,12 @@
     [SupplyParameterFromQuery(Name = "type")] public string? TypeCode { get; set; }
 
     private RoomSearchQuery _form = new();
-    private readonly RoomFilterState _filter = new();
     private bool _loading;
     private string? _error;
-    private int _page = 1;
 
-    private List<PublicRoom> Filtered => Apply(State.Results);
-    private int TotalPages => (int)Math.Ceiling(Filtered.Count / (double)PageSize);
-    private IEnumerable<PublicRoom> PageItems => Filtered.Skip((_page - 1) * PageSize).Take(PageSize);
+    private List<List<PublicRoom>> Groups => State.Results
+        .GroupBy(r => r.RoomTypeCode).Select(g => g.OrderBy(r => r.UnitPrice).ThenBy(r => r.Id).ToList())
+        .OrderBy(g => g[0].UnitPrice).ToList();
 
     protected override void OnInitialized() => State.Changed += OnStateChanged;
 
@@ -93,7 +83,6 @@
         }
 
         _form = q.Clone();
-        if (!string.IsNullOrEmpty(TypeCode)) _filter.RoomTypeCode = TypeCode;
 
         // Chỉ gọi API khi chưa tìm hoặc điều kiện đổi
         if (!State.HasSearched || !State.Query.SameAs(q))
@@ -104,7 +93,6 @@
     {
         _loading = true;
         _error = null;
-        _page = 1;
         try
         {
             var rooms = await RoomSvc.SearchAvailableAsync(q);
@@ -127,24 +115,6 @@
         return Task.CompletedTask;
     }
 
-    private List<PublicRoom> Apply(IEnumerable<PublicRoom> src)
-    {
-        var q = src.Where(r =>
-            (string.IsNullOrEmpty(_filter.RoomTypeCode) || r.RoomTypeCode == _filter.RoomTypeCode) &&
-            (string.IsNullOrEmpty(_filter.ViewType) || r.ViewType == _filter.ViewType) &&
-            (_filter.MaxPrice <= 0 || r.UnitPrice <= _filter.MaxPrice));
-
-        var sorted = _filter.Sort == "price_desc"
-     ? q.OrderByDescending(r => r.UnitPrice)
-     : q.OrderBy(r => r.UnitPrice);
-        return sorted.ThenBy(r => r.RoomNumber).ToList();
-    }
-
-    private string DetailUrl(PublicRoom r) => $"rooms/{r.Id}?{State.Query.ToQueryString()}";
-
-    private void OnFilterChanged() => _page = 1;
-    private void OnPageChanged(int p) => _page = p;
-    private void OnToggle(PublicRoom r) => State.Toggle(r);
     private void OnStateChanged() => _ = InvokeAsync(StateHasChanged);
 
     public void Dispose() => State.Changed -= OnStateChanged;

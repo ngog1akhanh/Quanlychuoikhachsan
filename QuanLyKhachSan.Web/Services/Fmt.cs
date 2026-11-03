@@ -31,7 +31,7 @@ public static class RoomImages
         return h % TypeCount;
     }
 
-    public static string Cover(PublicRoom r) => $"images/rooms/room-{Idx(r.RoomTypeCode)}-{(int)(r.Id % 3)}.svg";
+    public static string Cover(PublicRoom r) => $"images/rooms/room-{Idx(r.RoomTypeCode)}-0.svg";
 
     public static IReadOnlyList<string> Gallery(PublicRoom r)
     {

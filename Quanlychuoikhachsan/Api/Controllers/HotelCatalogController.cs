@@ -53,7 +53,7 @@ public sealed class HotelCatalogController(HotelDbContext db, IBookingService bo
         var x = await db.Phongs.AsNoTracking().Include(x => x.LoaiPhong).SingleOrDefaultAsync(x => x.Id == id && x.TrangThai != "NGUNG_SU_DUNG" && x.LoaiPhong.TrangThai == "HOAT_DONG", ct) ?? throw new ResourceNotFoundException("Room was not found.");
         var amenities = await (from link in db.Set<LoaiPhongTienNghi>() join a in db.Set<TienNghi>() on link.TienNghiId equals a.Id where link.LoaiPhongId == x.LoaiPhongId && a.TrangThai == "HOAT_DONG" select a).ToListAsync(ct);
         return Ok(new { x.Id, x.SoPhong, x.Tang, x.HuongPhong, x.LoaiView, x.ViTri, x.MoTa, x.PhuThuDemMacDinh,
-            RoomType = new { x.LoaiPhong.Id, x.LoaiPhong.TenLoaiPhong, x.LoaiPhong.SoNguoiLonToiDa, x.LoaiPhong.SoTreEmToiDa, x.LoaiPhong.DienTichM2, x.LoaiPhong.GiaCoBanDem }, Amenities = amenities,
+            RoomType = new { x.LoaiPhong.Id, x.LoaiPhong.TenLoaiPhong, x.LoaiPhong.SoNguoiLonToiDa, x.LoaiPhong.SoTreEmToiDa, x.LoaiPhong.DienTichM2, x.LoaiPhong.GiaCoBanDem, x.LoaiPhong.MoTa }, Amenities = amenities,
             Images = await db.Set<HinhAnhPhong>().Where(i => i.PhongId == id).OrderBy(i => i.ThuTu).ToListAsync(ct),
             TypeImages = await db.Set<HinhAnhLoaiPhong>().Where(i => i.LoaiPhongId == x.LoaiPhongId).OrderBy(i => i.ThuTu).ToListAsync(ct) });
     }

@@ -26,7 +26,7 @@ public sealed class RoomService
     private sealed record RoomSummary(long Id, string RoomCode, string RoomNumber, string RoomTypeCode, string RoomTypeName, decimal BaseNightlyPrice);
     private sealed record NightItem(DateOnly StayDate, decimal FinalPrice);
     private sealed record PriceQuote(long RoomId, List<NightItem>? Nights, decimal Total);
-    private sealed record RoomTypeInfo(int SoNguoiLonToiDa, int SoTreEmToiDa, decimal? DienTichM2);
+    private sealed record RoomTypeInfo(int SoNguoiLonToiDa, int SoTreEmToiDa, decimal? DienTichM2, string? MoTa);
     private sealed record RoomDetail(long Id, string? Tang, string? LoaiView, string? MoTa, RoomTypeInfo? RoomType);
 
     /// <summary>
@@ -61,7 +61,8 @@ public sealed class RoomService
                 it.Room.Id, it.Room.RoomNumber, it.Room.RoomTypeCode, it.Room.RoomTypeName,
                 nightly, 0m, d?.Tang, d?.LoaiView, d?.RoomType?.DienTichM2, d?.MoTa,
                 d?.RoomType?.SoNguoiLonToiDa ?? q.Adults, d?.RoomType?.SoTreEmToiDa ?? q.Children,
-                it.Quote.Nights?.Select(n => new QuotedNight(n.StayDate, n.FinalPrice)).ToList());
+                it.Quote.Nights?.Select(n => new QuotedNight(n.StayDate, n.FinalPrice)).ToList(),
+                BedConfiguration.FromDescription(d?.MoTa) ?? BedConfiguration.FromDescription(d?.RoomType?.MoTa));
         }).ToList();
 
         var rooms = await Task.WhenAll(tasks);

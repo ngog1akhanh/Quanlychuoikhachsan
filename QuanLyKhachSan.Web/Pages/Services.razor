@@ -1,87 +1,73 @@
 @page "/services"
+@page "/services/{Id:long}"
 @inject ApiClient Api
-@inject AuthState Auth
-@inject BookingService Bookings
-@inject NavigationManager Nav
 
 <PageTitle>Dịch vụ – @HotelInfo.Name</PageTitle>
-<div class="container section">
-    <h1>Dịch vụ khách sạn</h1>
-    <p>Chọn dịch vụ cho booking đang lưu trú. Nhân viên sẽ tiếp nhận và xác nhận yêu cầu.</p>
-    @if (_message is not null) { <p role="status">@_message</p> }
-    @if (_services is null) { <Loading /> }
-    else
+<section class="container section">
+    @if (_error is not null) { <p class="alert alert-danger" role="alert">@_error</p> }
+    else if (_services is null) { <Loading /> }
+    else if (Id is not null)
     {
-        @if (Auth.IsAuthenticated)
+        <p><a href="services">← Tất cả dịch vụ</a></p>
+        var service = _services.FirstOrDefault(s => s.Id == Id);
+        @if (service is null) { <p>Không tìm thấy dịch vụ.</p> }
+        else
         {
-            <label>Booking đang lưu trú
-                <select class="form-control" @bind="_bookingId">
-                    <option value="0">Chọn booking</option>
-                    @foreach (var b in _stays) { <option value="@b.Id">@b.BookingCode</option> }
-                </select>
-            </label>
-            <label>Số lượng <input class="form-control" type="number" min="1" max="100" @bind="_quantity" /></label>
-            <label>Ghi chú <input class="form-control" maxlength="500" @bind="_note" /></label>
-        }
-        <div class="grid-rooms-home">
-            @foreach (var s in _services)
-            {
-                <article class="card card-body">
-                    <h2>@s.TenDichVu</h2><p>@s.MoTa</p>
-                    <p>@Fmt.Money(s.DonGia) / @s.DonViTinh</p>
-                    <button class="btn btn-primary" disabled="@_busy" @onclick="() => Request(s.Id)">Yêu cầu dịch vụ</button>
-                </article>
-            }
-        </div>
-        @if (Auth.IsAuthenticated)
-        {
-            <h2>Yêu cầu của tôi</h2>
-            @foreach (var request in _requests)
-            {
-                <p>@(_services.FirstOrDefault(x => x.Id == request.DichVuId)?.TenDichVu ?? "Dịch vụ") · @request.SoLuong · @Status(request.TrangThai)</p>
-            }
+            <article class="service-detail card">
+                <img src="@Illustration(service)" alt="Minh họa @service.TenDichVu" />
+                <div class="card-body">
+                    <span class="section-kicker">TRẢI NGHIỆM TẠI KHÁCH SẠN</span>
+                    <h1>@service.TenDichVu</h1>
+                    <p>@(string.IsNullOrWhiteSpace(service.MoTa) ? "Vui lòng liên hệ lễ tân để biết thêm thông tin về dịch vụ." : service.MoTa)</p>
+                    <p class="price">@Fmt.Money(service.DonGia) / @service.DonViTinh</p>
+                    <p>Liên hệ lễ tân để được tư vấn và hỗ trợ sử dụng dịch vụ.</p>
+                    <a class="btn btn-primary" href="tel:@HotelInfo.PhoneRaw">@HotelInfo.Phone</a>
+                </div>
+            </article>
         }
     }
-</div>
+    else
+    {
+        <div class="section-head"><span class="section-kicker">TẬN HƯỞNG KỲ NGHỈ</span><h1>Dịch vụ khách sạn</h1><p>Khám phá những trải nghiệm dành cho kỳ nghỉ của bạn.</p></div>
+        <div class="service-banners">
+            @foreach (var service in _services)
+            {
+                <a class="service-banner" href="services/@service.Id">
+                    <img src="@Illustration(service)" alt="Minh họa @service.TenDichVu" loading="lazy" />
+                    <div><h2>@service.TenDichVu</h2><span>Khám phá dịch vụ →</span></div>
+                </a>
+            }
+        </div>
+        @if (_services.Count == 0) { <p>Thông tin dịch vụ đang được cập nhật.</p> }
+    }
+</section>
 @code {
+    [Parameter] public long? Id { get; set; }
     private sealed record Service(long Id, string TenDichVu, string DonViTinh, decimal DonGia, string? MoTa);
-    private sealed record ServiceUse(long DichVuId, decimal SoLuong, string TrangThai);
     private sealed record Page<T>(List<T> Items);
     private List<Service>? _services;
-    private List<QuanLyKhachSan.Web.Models.Booking.BookingListItem> _stays = [];
-    private List<ServiceUse> _requests = [];
-    private long _bookingId;
-    private int _quantity = 1;
-    private string? _note, _message;
-    private bool _busy;
+    private string? _error;
     protected override async Task OnInitializedAsync()
     {
         try
         {
-            _services = (await Api.GetAsync<Page<Service>>("v1/services?pageSize=100")).Items;
-            await Auth.EnsureInitializedAsync();
-            if (Auth.IsAuthenticated)
-            {
-                _stays = (await Bookings.GetMyBookingsAsync()).Where(x => x.Status == "DANG_O").ToList();
-                await LoadRequests();
-            }
+            var items = new List<Service>();
+            var page = 1;
+            List<Service> batch;
+            do {
+                batch = (await Api.GetAsync<Page<Service>>($"v1/services?page={page++}&pageSize=100")).Items;
+                items.AddRange(batch);
+            } while (batch.Count == 100);
+            _services = items;
         }
-        catch (ApiException ex) { _services ??= []; _message = ex.Message; }
+        catch (ApiException ex) { _error = ex.Message; }
     }
-    private async Task LoadRequests() => _requests = (await Api.GetAsync<Page<ServiceUse>>("v1/service-requests?pageSize=100")).Items;
-    private async Task Request(long id)
+    private static string Illustration(Service service)
     {
-        if (!await Auth.RequireLoginAsync(Nav)) return;
-        if (_bookingId == 0 || _quantity is < 1 or > 100) { _message = "Chọn booking đang lưu trú và số lượng từ 1 đến 100."; return; }
-        _busy = true;
-        try
-        {
-            await Api.PostAsync<object>("v1/service-requests", new { booking_id = _bookingId, service_id = id, quantity = _quantity, note = _note });
-            _message = "Đã gửi yêu cầu dịch vụ.";
-            await LoadRequests();
-        }
-        catch (ApiException ex) { _message = ex.Message; }
-        finally { _busy = false; }
+        var name = service.TenDichVu.ToLowerInvariant();
+        var kind = name.Contains("ăn") || name.Contains("sáng") || name.Contains("ẩm thực") ? "dining"
+            : name.Contains("giặt") ? "laundry"
+            : name.Contains("xe") || name.Contains("đón") ? "transport" : "wellness";
+        return $"images/services/{kind}.svg";
     }
-    private static string Status(string value) => value switch { "CHO_XU_LY" => "Chờ xử lý", "DANG_XU_LY" => "Đang xử lý", "HOAN_THANH" => "Hoàn thành", "DA_HUY" => "Đã hủy", _ => value };
 }
