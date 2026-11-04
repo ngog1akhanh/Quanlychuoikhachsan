@@ -1,6 +1,6 @@
 # Hệ thống quản lý khách sạn
 
-Nhánh `codex/integrate-lmt-api` tích hợp website của Trung, WinForms/API mới nhất của LMT và bộ database tương thích. Solution chung: **`HeThongQuanLyKhachSan.sln`**, dùng **.NET 10 SDK**. WinForms cần Windows.
+Nhánh `codex/integrate-lmt-api` tích hợp website của Trung, WinForms/API mới nhất của LMT và bộ database tương thích. Solution chung: **`HeThongQuanLyKhachSan.sln`**, dùng **.NET 9 SDK** (máy có .NET 10 SDK cũng build/chạy được). WinForms cần Windows.
 
 | Project | Chức năng | Địa chỉ mặc định |
 |---|---|---|
@@ -11,28 +11,26 @@ Nhánh `codex/integrate-lmt-api` tích hợp website của Trung, WinForms/API m
 
 ## Chuẩn bị database
 
-**Nâng cấp từ bản đã cài:** xem [bản sửa lỗi 03/11/2026](docs/BUG_FIXES_2026_11_03.md). Phiên bản này thêm liên hệ riêng theo booking; database cũ cần chạy `add_booking_contact.sql` một lần. Database mới dùng bundle bên dưới đã có sẵn các cột.
+> **Máy mới, chưa có database?** Làm theo hướng dẫn từng bước: [docs/HUONG_DAN_CAI_DAT_TU_DAU.md](docs/HUONG_DAN_CAI_DAT_TU_DAU.md) (cài phần mềm → tạo database → khai báo kết nối → chạy → đăng nhập → xử lý lỗi).
 
-1. Cài MySQL >= 8.0.16 hoặc MariaDB >= 10.4.
-2. Import **một file** [hotel_management_compatible.sql](Quanlychuoikhachsan/Database/Install/hotel_management_compatible.sql): 67 bảng, 5 view, 6 vai trò, 42 quyền. Không chạy lại các script nguồn sau bundle.
-3. Nếu cần dữ liệu/tài khoản demo, chạy riêng `Database/Scripts/seed_demo.sql` với database đã chọn. Seed không tự đổi database; chỉ dùng cho demo. Các tài khoản trong [danh sách demo](<tai khoan test demo.txt>) chỉ có sau bước này.
-4. Tùy chọn sau seed demo: chạy `Database/Scripts/seed_thong_ke.sql` trên cùng database để có hóa đơn lịch sử cho báo cáo theo kỳ/nhân viên/sản phẩm. Không cần chạy `fix_ngay_lap_hoa_don.sql` khi cài mới; đó là script hiệu chỉnh dữ liệu cũ cần đối chiếu riêng.
-5. Tùy chọn trên database demo: chạy `Database/Scripts/seed_operations_demo.sql` để có việc buồng phòng và tồn kho/phiếu nhập mẫu.
+**Thành viên mới pull về chỉ cần chạy MỘT file:** [`Quanlychuoikhachsan/Database/Install/hotel_management_full.sql`](Quanlychuoikhachsan/Database/Install/hotel_management_full.sql). File tạo database `hotel_management` gồm toàn bộ bảng, quyền, ràng buộc **và dữ liệu demo** (tài khoản, 24 phòng, booking, hóa đơn lịch sử cho báo cáo, kho, việc buồng phòng). **Không chạy thêm** script nào trong `Database/Scripts` sau file này.
 
-Ví dụ PowerShell 7 tại thư mục repo (có thể thay `mysql` bằng `mariadb`):
+1. Cài MySQL >= 8.0.16 (hoặc MariaDB >= 10.4) và MySQL Workbench.
+2. Workbench: **File → Open SQL Script…** → chọn `hotel_management_full.sql` → bấm ⚡ (**Execute all**). Kết quả cuối phải là `READY_WITH_DEMO_DATA`.
+   - Máy đã có database `hotel_management` thì script dừng ngay dòng đầu. Muốn dựng lại: `DROP DATABASE hotel_management;` rồi chạy lại (mất dữ liệu cũ).
+   - Dòng lệnh (PowerShell 7): `Get-Content 'Quanlychuoikhachsan/Database/Install/hotel_management_full.sql' -Raw -Encoding utf8 | mysql --host=127.0.0.1 --user=root --password --default-character-set=utf8mb4`
+3. Tạo tài khoản MySQL mà `appsettings.json` đang dùng (chạy trong Workbench): `CREATE USER IF NOT EXISTS 'hotel_app'@'localhost' IDENTIFIED BY 'change-me'; GRANT ALL PRIVILEGES ON hotel_management.* TO 'hotel_app'@'localhost';` – xong là API kết nối được, không cần User Secrets.
+4. Tài khoản demo trong [`tai khoan test demo.txt`](<tai khoan test demo.txt>), mật khẩu chung `12345` (vd. `admin.com`, `letan@hotel.com`, `kho@hotel.com`).
+5. Dữ liệu demo tính theo ngày chạy script (khách đến hôm nay, lô sắp hết hạn…): dựng lại vào ngày khác sẽ có dữ liệu mới theo ngày đó.
 
-```powershell
-Get-Content 'Quanlychuoikhachsan/Database/Install/hotel_management_compatible.sql' -Raw -Encoding utf8 |
-    mysql --host=127.0.0.1 --user=root --password --default-character-set=utf8mb4
-if ($LASTEXITCODE -ne 0) { throw 'Import database thất bại.' }
+**Các file database trong repo:**
 
-# Tùy chọn: chỉ chạy trên database demo.
-Get-Content 'Quanlychuoikhachsan/Database/Scripts/seed_demo.sql' -Raw -Encoding utf8 |
-    mysql --host=127.0.0.1 --user=root --password --database=hotel_management_compatible --default-character-set=utf8mb4
-if ($LASTEXITCODE -ne 0) { throw 'Seed demo thất bại.' }
-```
+| File | Dùng khi nào |
+|---|---|
+| `Database/Install/hotel_management_full.sql` | **Dựng database để chạy/demo** (file duy nhất cần chạy) |
+| `Database/Scripts/*.sql` | Script nguồn (schema, quyền, từng bộ seed). Chỉ dùng khi muốn nạp thêm một phần seed vào database đang có, hoặc khi sửa dữ liệu gốc |
 
-Không dùng `--force`: tên database đã tồn tại phải làm import dừng. Database đang có dữ liệu cần kế hoạch nâng cấp riêng. Xem [hướng dẫn database](docs/DATABASE_COMPATIBILITY.md). File SQL có sẵn trong Git; không cần RAR, Python hay thư mục `review` để import.
+**Sửa script nguồn:** sửa file trong `Database/Scripts`, rồi chạy `python scripts/build_database.py` để sinh lại `Database/Install/hotel_management_full.sql` và commit cả hai. Không sửa tay file trong `Install`. Kiểm tra file đã cập nhật: `python scripts/build_database.py --check`.
 
 ## Cấu hình và chạy
 
@@ -49,7 +47,7 @@ Cấu hình backend bằng User Secrets hoặc biến môi trường (`__` thay 
 | `Smtp:Host`, `Smtp:Port`, `Smtp:From`, `Smtp:Username`, `Smtp:Password` | Email khôi phục mật khẩu khi cần |
 
 ```powershell
-dotnet user-secrets set 'ConnectionStrings:HotelManagement' 'Server=127.0.0.1;Port=3306;Database=hotel_management_compatible;User ID=<app_user>;Password=<password>' --project Quanlychuoikhachsan
+dotnet user-secrets set 'ConnectionStrings:HotelManagement' 'Server=127.0.0.1;Port=3306;Database=hotel_management;User ID=<app_user>;Password=<password>' --project Quanlychuoikhachsan
 dotnet user-secrets set 'Database:ServerVersion' '11.4.13-mariadb' --project Quanlychuoikhachsan
 dotnet restore HeThongQuanLyKhachSan.sln
 dotnet build HeThongQuanLyKhachSan.sln
@@ -77,11 +75,11 @@ python scripts/build_database.py --check
 
 Đặt `HOTEL_TEST_MYSQL` thành connection string của server kiểm thử để chạy test database thật. Test tạo database có tên GUID và chỉ xóa database do chính test tạo. Thiếu biến này thì test server bị bỏ qua.
 
-- [Báo cáo tích hợp và phạm vi kiểm chứng](docs/LMT_INTEGRATION.md).
+- [Hướng dẫn cài đặt từ đầu](docs/HUONG_DAN_CAI_DAT_TU_DAU.md).
 - [Hướng dẫn backend](docs/HUONG_DAN_BACKEND.md).
 - [Các luồng nghiệp vụ](docs/API_WORKFLOWS.md).
 - [Danh mục endpoint](docs/API_ENDPOINTS.md) và [OpenAPI](docs/openapi.json).
 
 Gateway VietQR dùng cấu hình sandbox; kiểm thử local không chứng minh giao dịch ngân hàng thật. Hoàn tiền hiện ghi nhận khoản đã hoàn, không tự chuyển tiền. Import schema không tự tạo admin; seed demo cung cấp tài khoản thử, còn môi trường thật cần cấp tài khoản nhân viên và vai trò ADMIN riêng.
 
-Nút giả lập cọc chỉ hoạt động khi API ở `Development` và gateway ở chế độ demo. Xem [hướng dẫn QR](docs/THANH_TOAN_QR_COC.md). Lần tích hợp 03/11/2026: 66 test đạt (9 test MariaDB thật); WinForms tải 12 trang/43 tab, web hoàn tất luồng QR demo. Phạm vi và giới hạn nằm trong báo cáo tích hợp.
+Nút giả lập cọc chỉ hoạt động khi API ở `Development` và gateway ở chế độ demo. Lần tích hợp 03/11/2026: 66 test đạt (9 test MariaDB thật); WinForms tải 12 trang/43 tab, web hoàn tất luồng QR demo.

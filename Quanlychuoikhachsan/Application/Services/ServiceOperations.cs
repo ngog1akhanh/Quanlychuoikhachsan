@@ -13,7 +13,8 @@ public sealed record ServiceRequest([param: Required, StringLength(30)] string C
 public sealed record UseServiceRequest(long BookingId, long? RoomId, long ServiceId, decimal Quantity, [param: StringLength(500)] string? Note);
 public sealed record ServicePaymentRequest(long PaymentMethodId, decimal Amount, [param: Required, StringLength(150)] string Reference, long? ShiftId = null);
 
-public sealed class ServiceOperations(HotelDbContext db, CurrentActor actor)
+// notifications là tùy chọn để test cũ (new ServiceOperations(db, actor)) vẫn chạy; DI luôn truyền vào.
+public sealed class ServiceOperations(HotelDbContext db, CurrentActor actor, NotificationWriter? notifications = null)
 {
     public async Task<SuDungDichVu> RequestAsync(UseServiceRequest r, CancellationToken ct)
     {
@@ -27,7 +28,24 @@ public sealed class ServiceOperations(HotelDbContext db, CurrentActor actor)
         var total = Input.Round(r.Quantity * service.DonGia); Input.Money(total, "total");
         var row = new SuDungDichVu { MaSuDung = $"DV{Guid.NewGuid():N}", DatPhongId = booking.Id, PhongId = r.RoomId, DichVuId = service.Id,
             TaiKhoanYeuCauId = actor.AccountId, ThoiGianYeuCau = DateTime.UtcNow, SoLuong = r.Quantity, DonGia = service.DonGia, ThanhTien = total, GhiChu = r.Note, TrangThai = "CHO_XU_LY" };
-        db.Add(row); await db.SaveChangesAsync(ct); return row;
+        db.Add(row); await db.SaveChangesAsync(ct);
+        await NotifyNewRequestAsync(booking, service, r, ct);
+        return row;
+    }
+
+    /// <summary>Báo cho nhân viên có quyền SERVICE_WRITE (trừ người vừa tạo) khi có yêu cầu dịch vụ mới.</summary>
+    private async Task NotifyNewRequestAsync(DatPhong booking, DichVu service, UseServiceRequest r, CancellationToken ct)
+    {
+        if (notifications is null) return;
+        var recipients = await db.TaiKhoanVaiTros.Where(x => x.TaiKhoan.TrangThai == "HOAT_DONG" && x.VaiTro.TrangThai == "HOAT_DONG"
+                && x.VaiTro.VaiTroQuyens.Any(p => p.Quyen.MaQuyen == "SERVICE_WRITE"))
+            .Select(x => x.TaiKhoanId).Distinct().ToListAsync(ct);
+        recipients.Remove(actor.AccountId);
+        if (recipients.Count == 0) return;
+        var room = r.RoomId.HasValue ? await db.Phongs.Where(p => p.Id == r.RoomId).Select(p => p.SoPhong).SingleOrDefaultAsync(ct) : null;
+        var content = $"{(room is null ? $"Booking {booking.MaDatPhong}" : $"Phòng {room}")} · số lượng {r.Quantity:0.##}"
+            + (string.IsNullOrWhiteSpace(r.Note) ? "" : $" · ghi chú: {r.Note.Trim()}");
+        await notifications.SendAsync("SERVICE_REQUEST", $"Yêu cầu dịch vụ mới: {service.TenDichVu}", content, recipients, actor.AccountId, booking, ct);
     }
 
     public async Task<object> TransitionAsync(long id, string status, CancellationToken ct)

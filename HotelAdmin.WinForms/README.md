@@ -1,13 +1,13 @@
 # App quản lý khách sạn (WinForms)
 
-Ứng dụng Windows (.NET 10) cho nhân viên khách sạn, gọi REST API của backend `Quanlychuoikhachsan`.
+Ứng dụng Windows (.NET 9) cho nhân viên khách sạn, gọi REST API của backend `Quanlychuoikhachsan`.
 
 ## Chạy
 
 1. Chạy backend trước (profile **http**, cổng 5005).
 2. Kiểm tra `appsettings.json` → `ApiBaseUrl` trỏ đúng địa chỉ backend.
 3. Chạy app: `dotnet run --project HotelAdmin.WinForms.csproj`, hoặc nhấp đúp `chay-he-thong.bat` ở thư mục gốc để mở cả API, Web và App.
-4. Nếu đã chạy seed demo trên database thử nghiệm, đăng nhập bằng tài khoản trong `tai khoan test demo.txt` (mật khẩu `12345`). Xem [cài database](../docs/DATABASE_COMPATIBILITY.md).
+4. Nếu đã chạy seed demo trên database thử nghiệm, đăng nhập bằng tài khoản trong `tai khoan test demo.txt` (mật khẩu `12345`). Xem [hướng dẫn cài đặt từ đầu](../docs/HUONG_DAN_CAI_DAT_TU_DAU.md).
 
 ## Các module
 
@@ -35,4 +35,3 @@ Menu và nút thao tác hiện theo vai trò, quyền của tài khoản đăng 
 ## Ghi chú
 
 - Trả phòng gồm 3 bước: **chốt hóa đơn → xác nhận đã thu tiền → trả phòng**.
-- Chi tiết thay đổi đợt 01/11: [docs/update_11_1.md](../docs/update_11_1.md).

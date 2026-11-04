@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net9.0</TargetFramework>
+    <!-- Build bằng .NET 9 SDK; máy chỉ cài .NET 10 runtime vẫn chạy được nhờ RollForward. -->
+    <RollForward>Major</RollForward>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>QuanLyKhachSan.Web</RootNamespace>

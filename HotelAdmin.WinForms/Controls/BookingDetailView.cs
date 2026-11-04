@@ -267,6 +267,10 @@ public sealed class BookingDetailView : Panel
         grid.DefaultCellStyle.Font = AppTheme.Small;
         grid.DefaultCellStyle.Padding = new Padding(6, 0, 2, 0);
         grid.ColumnHeadersDefaultCellStyle.Padding = new Padding(6, 0, 0, 0);
+        // Lưới chỉ để xem: không chọn dòng, không nhận focus (bỏ viền ô đang chọn), không hiện tooltip che số liệu.
+        grid.TabStop = false;
+        grid.ShowCellToolTips = false;
+        grid.SelectionChanged += (_, _) => { if (grid.SelectedCells.Count > 0) grid.ClearSelection(); };
         return grid;
     }
 

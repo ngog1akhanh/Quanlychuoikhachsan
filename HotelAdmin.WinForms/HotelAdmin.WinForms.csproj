@@ -1,9 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- App quản lý khách sạn (phần B) - WinForms .NET 10, gọi REST API /v1 của backend Quanlychuoikhachsan. -->
+  <!-- App quản lý khách sạn (phần B) - WinForms .NET 9, gọi REST API /v1 của backend Quanlychuoikhachsan. -->
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net10.0-windows</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
+    <!-- Build bằng .NET 9 SDK; máy chỉ cài .NET 10 runtime vẫn chạy được nhờ RollForward. -->
+    <RollForward>Major</RollForward>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

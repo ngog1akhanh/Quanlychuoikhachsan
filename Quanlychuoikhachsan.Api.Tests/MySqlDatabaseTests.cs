@@ -221,8 +221,11 @@ public sealed partial class MySqlDatabaseTests(ITestOutputHelper output)
             await database.connection.OpenAsync();
             try
             {
-                var sql = await File.ReadAllTextAsync(Path.Combine(Root, "Quanlychuoikhachsan/Database/Install/hotel_management_compatible.sql"));
-                await database.ExecuteAsync(sql.Replace("`hotel_management_compatible`", $"`{database.Name}`"));
+                // Lấy phần cấu trúc + quyền của file cài duy nhất (cắt trước mốc dữ liệu demo do build_database.py ghi).
+                var full = await File.ReadAllTextAsync(Path.Combine(Root, "Quanlychuoikhachsan/Database/Install/hotel_management_full.sql"));
+                var marker = full.IndexOf("-- ===== DEMO DATA BELOW =====", StringComparison.Ordinal);
+                if (marker < 0) throw new InvalidOperationException("hotel_management_full.sql thiếu mốc DEMO DATA; chạy lại scripts/build_database.py.");
+                await database.ExecuteAsync(full[..marker].Replace("`hotel_management`", $"`{database.Name}`"));
                 return database;
             }
             catch { await database.DisposeAsync(); throw; }
