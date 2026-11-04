@@ -1,46 +1,36 @@
-<div class="card room-card @(Selected ? "selected" : "")">
-    <div class="thumb">
-        <a href="@DetailHref"><img src="@RoomImages.Cover(Room)" alt="@Room.RoomTypeName" loading="lazy" /></a>
-        <span class="room-no">Phòng @Room.RoomNumber</span>
-        @if (Selected) { <span class="tick">✓ Đã chọn</span> }
-    </div>
+<article class="card room-card @(SelectedCount > 0 ? "selected" : "")">
+    <a class="thumb" href="@DetailHref"><img src="@RoomImages.Cover(Room)" alt="@Room.RoomTypeName" loading="lazy" /></a>
     <div class="info">
         <h3><a href="@DetailHref">@Room.RoomTypeName</a></h3>
+        @BedOptions
         <div class="room-meta">
-            @if (!string.IsNullOrEmpty(Room.Floor)) { <span>🏢 Tầng @Room.Floor</span> }
-            <span>🌅 @(string.IsNullOrEmpty(Room.ViewType) ? "Không ghi view" : Room.ViewType)</span>
-            @if (Room.AreaM2 is not null) { <span>📐 @Room.AreaM2.Value.ToString("0.#") m²</span> }
-            <span>👥 @Room.MaxAdults người lớn@(Room.MaxChildren > 0 ? $", {Room.MaxChildren} trẻ em" : "")</span>
+            <span>@Room.BedLabel</span>
+            @if (Room.AreaM2 is not null) { <span>@Room.AreaM2.Value.ToString("0.#") m²</span> }
+            <span>@Room.MaxAdults người lớn@(Room.MaxChildren > 0 ? $", {Room.MaxChildren} trẻ em" : "")</span>
         </div>
-        @if (!string.IsNullOrEmpty(Room.Description))
-        {
-            <div class="room-desc">@Truncate(Room.Description, 110)</div>
-        }
+        @if (AvailableCount is > 0 and < 5) { <p class="availability-note">Chỉ còn @AvailableCount phòng trong thời gian này</p> }
         <div class="room-foot">
-            <div class="room-price">
-                <b>@Fmt.Money(Room.UnitPrice)</b>
-                <small>/đêm</small>
-                @if (Nights > 0)
-                {
-                    <small><br />@Nights đêm: @Fmt.Money(Room.UnitPrice * Nights)</small>
-                }
-            </div>
+            <div class="room-price"><small>Giá từ</small><b>@Fmt.Money(Room.UnitPrice)</b><small>/đêm (bình quân)</small></div>
             <div class="room-actions">
                 <a class="btn btn-outline btn-sm" href="@DetailHref">Xem chi tiết</a>
-                <button type="button" class="btn @(Selected ? "btn-outline" : "btn-primary") btn-sm" @onclick="() => OnToggle.InvokeAsync(Room)">
-                    @(Selected ? "Bỏ chọn" : "Chọn phòng")
-                </button>
+                <button class="btn btn-primary btn-sm" disabled="@(SelectedCount >= (SelectionLimit ?? AvailableCount))" @onclick="OnAdd">Chọn phòng</button>
+                @if (SelectedCount > 0)
+                {
+                    <span>Đã chọn @SelectedCount</span>
+                    <button class="btn btn-outline btn-sm" @onclick="OnRemove" aria-label="Bớt một phòng">−</button>
+                }
             </div>
         </div>
     </div>
-</div>
-
+</article>
 @code {
     [Parameter, EditorRequired] public PublicRoom Room { get; set; } = default!;
+    [Parameter] public RenderFragment? BedOptions { get; set; }
     [Parameter] public int Nights { get; set; }
-    [Parameter] public bool Selected { get; set; }
+    [Parameter] public int? SelectionLimit { get; set; }
+    [Parameter] public int AvailableCount { get; set; }
+    [Parameter] public int SelectedCount { get; set; }
     [Parameter] public string DetailHref { get; set; } = "#";
-    [Parameter] public EventCallback<PublicRoom> OnToggle { get; set; }
-
-    private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max].TrimEnd() + "…";
+    [Parameter] public EventCallback OnAdd { get; set; }
+    [Parameter] public EventCallback OnRemove { get; set; }
 }

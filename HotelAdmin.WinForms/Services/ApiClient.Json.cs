@@ -46,7 +46,7 @@ public sealed partial class ApiClient
             try
             {
                 using var doc = JsonDocument.Parse(text);
-                return doc.RootElement.Clone();
+                return HotelAdmin.Models.J.Unwrap(doc.RootElement.Clone());
             }
             catch (JsonException)
             {

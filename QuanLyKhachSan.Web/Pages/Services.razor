@@ -1,0 +1,73 @@
+@page "/services"
+@page "/services/{Id:long}"
+@inject ApiClient Api
+
+<PageTitle>Dịch vụ – @HotelInfo.Name</PageTitle>
+<section class="container section">
+    @if (_error is not null) { <p class="alert alert-danger" role="alert">@_error</p> }
+    else if (_services is null) { <Loading /> }
+    else if (Id is not null)
+    {
+        <p><a href="services">← Tất cả dịch vụ</a></p>
+        var service = _services.FirstOrDefault(s => s.Id == Id);
+        @if (service is null) { <p>Không tìm thấy dịch vụ.</p> }
+        else
+        {
+            <article class="service-detail card">
+                <img src="@Illustration(service)" alt="Minh họa @service.TenDichVu" />
+                <div class="card-body">
+                    <span class="section-kicker">TRẢI NGHIỆM TẠI KHÁCH SẠN</span>
+                    <h1>@service.TenDichVu</h1>
+                    <p class="service-intro">@ServicePresentation.For(service.TenDichVu).Intro</p>
+                    <h2>Trải nghiệm dịch vụ</h2>
+                    <p>@ServicePresentation.For(service.TenDichVu).Experience</p>
+                    <h2>Thông tin phục vụ</h2>
+                    <p>@(string.IsNullOrWhiteSpace(service.MoTa) ? "Vui lòng liên hệ lễ tân để biết thêm thông tin về dịch vụ." : service.MoTa)</p>
+                    <p class="price">@Fmt.Money(service.DonGia) / @service.DonViTinh</p>
+                    <h2>Trước khi sử dụng</h2>
+                    <p>@ServicePresentation.For(service.TenDichVu).Preparation</p>
+                    <p class="muted small">Hình ảnh minh họa cho dịch vụ.</p>
+                    <a class="btn btn-primary" href="tel:@HotelInfo.PhoneRaw">@HotelInfo.Phone</a>
+                </div>
+            </article>
+        }
+    }
+    else
+    {
+        <div class="section-head"><span class="section-kicker">TẬN HƯỞNG KỲ NGHỈ</span><h1>Dịch vụ khách sạn</h1><p>Khám phá những trải nghiệm dành cho kỳ nghỉ của bạn.</p></div>
+        <div class="service-banners">
+            @foreach (var service in _services)
+            {
+                <a class="service-banner" href="services/@service.Id">
+                    <img src="@Illustration(service)" alt="Minh họa @service.TenDichVu" loading="lazy" />
+                    <div><h2>@service.TenDichVu</h2><p>@ServicePresentation.For(service.TenDichVu).Intro</p><span>Khám phá dịch vụ →</span></div>
+                </a>
+            }
+        </div>
+        @if (_services.Count == 0) { <p>Thông tin dịch vụ đang được cập nhật.</p> }
+    }
+</section>
+@code {
+    [Parameter] public long? Id { get; set; }
+    private sealed record Service(long Id, string TenDichVu, string DonViTinh, decimal DonGia, string? MoTa);
+    private sealed record Page<T>(List<T> Items);
+    private List<Service>? _services;
+    private string? _error;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var items = new List<Service>();
+            var page = 1;
+            List<Service> batch;
+            do {
+                batch = (await Api.GetAsync<Page<Service>>($"v1/services?page={page++}&pageSize=100")).Items;
+                items.AddRange(batch);
+            } while (batch.Count == 100);
+            _services = items;
+        }
+        catch (ApiException ex) { _error = ex.Message; }
+    }
+    private static string Illustration(Service service)
+        => $"images/services/{ServicePresentation.For(service.TenDichVu).Image}.jpg";
+}

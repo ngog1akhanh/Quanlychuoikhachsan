@@ -180,6 +180,9 @@ public sealed partial class ApiClient
             if (string.IsNullOrWhiteSpace(text)) return fallback;
             using var doc = JsonDocument.Parse(text);
             var root = doc.RootElement;
+            if (root.TryGetProperty("errors", out var validation) && validation.ValueKind == JsonValueKind.Object)
+                return "Dữ liệu chưa hợp lệ: " + string.Join("; ", validation.EnumerateObject().SelectMany(p =>
+                    p.Value.ValueKind == JsonValueKind.Array ? p.Value.EnumerateArray().Select(v => $"{p.Name}: {v.GetString()}") : new[] { p.Name }));
             if (root.TryGetProperty("error", out var error) && error.TryGetProperty("message", out var m1))
                 return m1.GetString() ?? fallback;
             if (root.TryGetProperty("message", out var m2))

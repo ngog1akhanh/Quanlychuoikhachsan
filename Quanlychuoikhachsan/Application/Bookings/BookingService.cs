@@ -285,6 +285,9 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
                 KenhDat = channel,
                 TrangThai = "HOLD",
                 YeuCauDacBiet = request.SpecialRequest,
+                ContactName = request.ContactName?.Trim(),
+                ContactPhone = request.ContactPhone?.Trim(),
+                ContactEmail = request.ContactEmail?.Trim(),
                 CreatedAt = now,
                 UpdatedAt = now
             };

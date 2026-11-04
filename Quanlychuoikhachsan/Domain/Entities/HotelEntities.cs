@@ -298,6 +298,12 @@ public sealed class DatPhong : EntityBase
     public string KenhDat { get; set; } = "WEB";
     public string TrangThai { get; set; } = "CHO_COC";
     public string? YeuCauDacBiet { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.Column("contact_name"), System.ComponentModel.DataAnnotations.MaxLength(120)]
+    public string? ContactName { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.Column("contact_phone"), System.ComponentModel.DataAnnotations.MaxLength(20)]
+    public string? ContactPhone { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.Column("contact_email"), System.ComponentModel.DataAnnotations.MaxLength(150)]
+    public string? ContactEmail { get; set; }
     public decimal TongTienPhongGoc { get; set; }
     public decimal TongTienDuKien { get; set; }
     public DateTime CreatedAt { get; set; }

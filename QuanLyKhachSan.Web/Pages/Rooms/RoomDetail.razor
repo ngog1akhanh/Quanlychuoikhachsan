@@ -4,7 +4,7 @@
 @inject BookingState State
 @inject NavigationManager Nav
 
-<PageTitle>@(_room?.RoomTypeName ?? "Chi tiết phòng") – @HotelInfo.Name</PageTitle>
+<PageTitle>@(_room?.VariantName ?? "Chi tiết phòng") – @HotelInfo.Name</PageTitle>
 
 <div class="container section">
     <p class="small"><a href="rooms?@State.Query.ToQueryString()">← Quay lại danh sách phòng</a></p>
@@ -26,20 +26,20 @@
         var q = State.Query;
         <div class="layout-main-side">
             <div>
-                <RoomGallery Images="RoomImages.Gallery(r)" Title="@r.RoomTypeName" />
+                <RoomGallery Images="RoomImages.Gallery(r)" Title="@r.VariantName" />
 
-                <h1 class="mt-2">@r.RoomTypeName <small class="muted" style="font-size:18px">· Phòng @r.RoomNumber</small></h1>
+                <h1 class="mt-2">@r.VariantName</h1>
 
                 <div class="spec-grid">
                     <div class="spec"><small>Diện tích</small><b>@(r.AreaM2 is null ? "—" : r.AreaM2.Value.ToString("0.#") + " m²")</b></div>
                     <div class="spec"><small>Sức chứa</small><b>@r.MaxAdults người lớn@(r.MaxChildren > 0 ? $" + {r.MaxChildren} trẻ em" : "")</b></div>
-                    <div class="spec"><small>Tầng</small><b>@(r.Floor ?? "—")</b></div>
-                    <div class="spec"><small>View</small><b>@(r.ViewType ?? "—")</b></div>
+                    <div class="spec"><small>Giường</small><b>@r.BedLabel</b></div>
+
                 </div>
 
                 <div class="card card-body">
                     <div class="card-title">Mô tả</div>
-                    <p>@(r.Description ?? "Đang cập nhật.")</p>
+                    <p>@r.VariantName · @r.BedLabel</p>
 
                     <div class="card-title mt-2">Tiện nghi</div>
                     <ul class="amenities">
@@ -58,7 +58,7 @@
                         <tbody>
                             @for (var d = q.CheckIn; d < q.CheckOut; d = d.AddDays(1))
                             {
-                                <tr><td>@Fmt.Weekday(d)</td><td>@Fmt.Money(r.UnitPrice)</td></tr>
+                                <tr><td>@Fmt.Weekday(d)</td><td>@Fmt.Money(r.NightPrices?.FirstOrDefault(n => n.StayDate == d)?.FinalPrice ?? r.UnitPrice)</td></tr>
                             }
                         </tbody>
                         <tfoot><tr><td>Tổng @q.Nights đêm</td><td>@Fmt.Money(r.UnitPrice * q.Nights)</td></tr></tfoot>

@@ -12,12 +12,13 @@
 
 <header class="site-header">
     <div class="container bar">
-        <a class="logo" href="/"><span class="logo-mark">GS</span>@HotelInfo.Name</a>
+        <a class="logo" href="/"><img src="images/logo.svg" alt="" width="40" height="40" />@HotelInfo.Name</a>
 
         <button class="nav-toggle" type="button" aria-label="Mở menu" @onclick="() => _menuOpen = !_menuOpen">☰</button>
 
         <nav class="main-nav @(_menuOpen ? "open" : "")" @onclick="CloseMenus">
             <NavLink href="" Match="NavLinkMatch.All">Trang chủ</NavLink>
+            <NavLink href="services">Dịch vụ</NavLink>
             <NavLink href="rooms">Đặt phòng</NavLink>
             <a href="/#chinh-sach">Thông tin &amp; chính sách</a>
             <NavLink href="account/bookings">Booking của tôi</NavLink>

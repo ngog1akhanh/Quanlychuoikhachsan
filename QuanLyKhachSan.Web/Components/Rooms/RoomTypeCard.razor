@@ -1,0 +1,48 @@
+@if (CurrentRooms.Count > 0)
+{
+    var room = CurrentRooms.FirstOrDefault(r => !State.IsSelected(r.Id)) ?? CurrentRooms[0];
+    <RoomCard Room="room" Nights="Query.Nights" AvailableCount="Rooms.Count" SelectionLimit="CurrentRooms.Count"
+              SelectedCount="CurrentRooms.Count(r => State.IsSelected(r.Id))"
+              DetailHref="@($"rooms/{room.Id}?{Query.ToQueryString()}")"
+              OnAdd="AddRoom" OnRemove="RemoveRoom">
+        <BedOptions>
+            <div class="bed-options" role="group" aria-label="Loại giường @room.RoomTypeName">
+                @foreach (var variant in Variants)
+                {
+                    <button type="button" class="bed-option @(_bed == variant.Key ? "active" : "")"
+                            aria-pressed="@(_bed == variant.Key ? "true" : "false")"
+                            @onclick="() => _bed = variant.Key">@Label(variant.Key)</button>
+                }
+            </div>
+        </BedOptions>
+    </RoomCard>
+}
+
+@code {
+    [Parameter, EditorRequired] public List<PublicRoom> Rooms { get; set; } = [];
+    [Parameter, EditorRequired] public BookingState State { get; set; } = default!;
+    [Parameter, EditorRequired] public RoomSearchQuery Query { get; set; } = default!;
+    private string? _bed;
+    private IEnumerable<IGrouping<string?, PublicRoom>> Variants => Rooms.GroupBy(r => r.BedDescription);
+    private List<PublicRoom> CurrentRooms => Rooms.Where(r => r.BedDescription == _bed).OrderBy(r => r.UnitPrice).ThenBy(r => r.Id).ToList();
+
+    protected override void OnParametersSet()
+    {
+        if (!Rooms.Any(r => r.BedDescription == _bed)) _bed = Rooms.FirstOrDefault()?.BedDescription;
+    }
+    private static string Label(string? beds) => beds switch
+    {
+        "1 giường đơn" => "Single", "2 giường đơn" => "Twin", "1 giường đôi" => "Double",
+        null or "" => "Bố trí tiêu chuẩn", _ => beds
+    };
+    private void AddRoom()
+    {
+        var room = CurrentRooms.FirstOrDefault(r => !State.IsSelected(r.Id));
+        if (room is not null) State.Toggle(room);
+    }
+    private void RemoveRoom()
+    {
+        var room = CurrentRooms.LastOrDefault(r => State.IsSelected(r.Id));
+        if (room is not null) State.Remove(room.Id);
+    }
+}

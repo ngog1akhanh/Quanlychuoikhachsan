@@ -10,9 +10,11 @@
 -- Không tạo khóa lịch phòng (booking đã ở quá khứ) nên không ảnh hưởng sơ đồ phòng / đặt phòng mới.
 -- Xóa dữ liệu này: xem cuối file.
 -- ============================================================
-USE hotel_management;
+-- Chọn database demo ở client (--database=...), không đổi database tại đây.
 SET NAMES utf8mb4;
+SET time_zone = '+00:00';
 SET SQL_SAFE_UPDATES = 0;
+START TRANSACTION;
 
 -- Dãy số 1..300 -> ngày nhận phòng; số đêm, phòng, khách, nhân viên chọn theo phần dư
 -- (mã TK-xxxx tính trực tiếp bằng LPAD trong từng câu, không lưu chuỗi trong bảng tạm để tránh lỗi lệch collation)
@@ -115,6 +117,7 @@ DROP TEMPORARY TABLE IF EXISTS tk_phong;
 DROP TEMPORARY TABLE IF EXISTS tk_khach;
 
 -- Kiểm tra nhanh
+COMMIT;
 SELECT YEAR(ngay_lap) AS nam, COUNT(*) AS so_hd_phong, SUM(tong_tien) AS tong_hd_phong
 FROM hoa_don_phong WHERE trang_thai NOT IN ('NHAP', 'DA_HUY') GROUP BY YEAR(ngay_lap) ORDER BY nam;
 

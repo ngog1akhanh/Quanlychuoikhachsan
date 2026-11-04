@@ -133,7 +133,8 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
             .OrderByDescending(x => x.o.Id)
             .Select(x => new
             {
-                x.o.Id, x.o.OrderId, x.o.BookingId, x.b.MaDatPhong, BookingStatus = x.b.TrangThai, x.b.KhachHang.HoTen, x.b.KhachHang.SoDienThoai,
+                x.o.Id, x.o.OrderId, x.o.BookingId, x.b.MaDatPhong, BookingStatus = x.b.TrangThai,
+                HoTen = x.b.ContactName ?? x.b.KhachHang.HoTen, SoDienThoai = x.b.ContactPhone ?? x.b.KhachHang.SoDienThoai,
                 x.o.Amount, x.o.Description, x.o.Status, x.o.TransactionId, x.o.CreatedAt, x.o.PaidAt,
                 HoldExpiresAt = db.Set<KhoaLichPhong>().Where(k => db.Set<ChiTietDatPhong>().Any(d => d.Id == k.ChiTietDatPhongId && d.DatPhongId == x.o.BookingId))
                     .Max(k => k.HetHanGiuCho)

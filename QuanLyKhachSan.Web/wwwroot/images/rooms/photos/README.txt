@@ -7,3 +7,5 @@
   default-1.jpg ...               -> (tuỳ chọn) dùng cho loại phòng chưa có ảnh riêng
 Ảnh đầu tiên (số nhỏ nhất) là ảnh bìa; tất cả ảnh cùng mã hiện trong thư viện ảnh ở trang chi tiết.
 Khuyến nghị: tỉ lệ 3:2, rộng >= 1200px. Khởi động lại web sau khi thêm ảnh.
+
+Database tích hợp dùng SUITE: ưu tiên suite-*.jpg, nếu chưa có thì dùng exe-* làm ảnh minh họa Suite. Ảnh giữ cố định theo hạng, không xoay theo số phòng.

@@ -13,11 +13,22 @@ public sealed record PublicRoom(
     decimal? AreaM2,
     string? Description,
     int MaxAdults,
-    int MaxChildren)
+    int MaxChildren,
+    IReadOnlyList<QuotedNight>? NightPrices = null,
+    string? BedDescription = null)
 {
     /// <summary>Giá 1 đêm = giá cơ bản + phụ thu riêng của phòng.</summary>
+    public string BedLabel => string.IsNullOrWhiteSpace(BedDescription) ? "Đang cập nhật loại giường" : BedDescription;
+    public string VariantName => RoomTypeName + (BedDescription switch
+    {
+        "1 giường đơn" => " Single", "2 giường đơn" => " Twin", "1 giường đôi" => " Double",
+        null or "" => "", _ => " · " + BedDescription
+    });
+    public string GroupKey => RoomTypeCode + "|" + BedDescription;
     public decimal UnitPrice => BaseNightlyPrice + NightSurcharge;
 }
+
+public sealed record QuotedNight(DateOnly StayDate, decimal FinalPrice);
 
 /// <summary>Điều kiện tìm phòng (dùng chung Home / RoomList).</summary>
 public sealed class RoomSearchQuery
@@ -53,15 +64,6 @@ public sealed class RoomSearchQuery
 
     public bool SameAs(RoomSearchQuery o)
         => CheckIn == o.CheckIn && CheckOut == o.CheckOut && Adults == o.Adults && Children == o.Children;
-}
-
-/// <summary>Bộ lọc kết quả phía client (loại phòng, view, giá).</summary>
-public sealed class RoomFilterState
-{
-    public string RoomTypeCode { get; set; } = "";
-    public string ViewType { get; set; } = "";
-    public decimal MaxPrice { get; set; } = 0;     // 0 = không giới hạn
-    public string Sort { get; set; } = "price_asc"; // price_asc | price_desc
 }
 
 /// <summary>Thông tin tĩnh của khách sạn (API chưa có endpoint). Sửa theo thông tin thật.</summary>

@@ -64,6 +64,14 @@ public class ModernGrid : DataGridView
             SortMode = DataGridViewColumnSortMode.NotSortable
         };
         col.DefaultCellStyle.Alignment = align;
+        if (align != DataGridViewContentAlignment.MiddleLeft)
+        {
+            // Tiêu đề canh cùng phía và cùng khoảng đệm với số liệu -> số nằm thẳng dưới tiêu đề cột.
+            var pad = align == DataGridViewContentAlignment.MiddleCenter ? new Padding(4, 0, 4, 0) : new Padding(4, 0, 12, 0);
+            col.HeaderCell.Style.Alignment = align;
+            col.HeaderCell.Style.Padding = pad;
+            col.DefaultCellStyle.Padding = pad;
+        }
         if (format is not null) col.DefaultCellStyle.Format = format;
         Columns.Add(col);
         return col;

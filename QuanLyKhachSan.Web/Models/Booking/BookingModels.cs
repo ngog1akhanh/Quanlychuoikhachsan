@@ -9,7 +9,10 @@ public sealed record CreateBookingRequest(
     DateTime CheckOut,
     int Adults = 1,
     int Children = 0,
-    string? SpecialRequest = null);
+    string? SpecialRequest = null,
+    [param: System.ComponentModel.DataAnnotations.StringLength(120)] string? ContactName = null,
+    [param: System.ComponentModel.DataAnnotations.Phone, System.ComponentModel.DataAnnotations.StringLength(20)] string? ContactPhone = null,
+    [param: System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(150)] string? ContactEmail = null);
 
 public sealed record NightPrice(
     DateOnly StayDate,

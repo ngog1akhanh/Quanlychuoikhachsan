@@ -48,6 +48,8 @@ public class IconBox : Control
     public float GlyphSize { get; set; } = 11f;
     public int Radius { get; set; } = 10;
     public bool ShowDot { get; set; }
+    /// <summary>Số hiển thị trên huy hiệu đỏ (ví dụ số thông báo chưa đọc); 0 = chỉ dùng ShowDot.</summary>
+    public int BadgeCount { get; set; }
 
     protected override void OnPaint(PaintEventArgs e)
     {
@@ -67,7 +69,20 @@ public class IconBox : Control
         }
         TextRenderer.DrawText(g, Glyph, AppTheme.Icon(GlyphSize), ClientRectangle, GlyphColor,
             TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
-        if (ShowDot)
+        if (BadgeCount > 0)
+        {
+            var text = BadgeCount > 99 ? "99+" : BadgeCount.ToString();
+            using var font = new Font("Segoe UI", 7f, FontStyle.Bold);
+            var size = TextRenderer.MeasureText(text, font, Size.Empty, TextFormatFlags.NoPadding);
+            var w = Math.Max(15, size.Width + 6);
+            var badge = new Rectangle(Width - w, 0, w, 15);
+            using var path = AppTheme.RoundedRect(badge, 7);
+            using var fill = new SolidBrush(AppTheme.Badge);
+            g.FillPath(fill, path);
+            TextRenderer.DrawText(g, text, font, badge, Color.White,
+                TextFormatFlags.VerticalCenter | TextFormatFlags.HorizontalCenter | TextFormatFlags.NoPadding);
+        }
+        else if (ShowDot)
         {
             using var dot = new SolidBrush(AppTheme.Badge);
             g.FillEllipse(dot, Width - 12, 6, 7, 7);

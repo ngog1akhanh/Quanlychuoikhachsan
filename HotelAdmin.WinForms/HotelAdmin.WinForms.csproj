@@ -4,6 +4,8 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net9.0-windows</TargetFramework>
+    <!-- Build bằng .NET 9 SDK; máy chỉ cài .NET 10 runtime vẫn chạy được nhờ RollForward. -->
+    <RollForward>Major</RollForward>
     <UseWindowsForms>true</UseWindowsForms>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>

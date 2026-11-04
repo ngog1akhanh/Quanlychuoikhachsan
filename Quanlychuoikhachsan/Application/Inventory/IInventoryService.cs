@@ -20,8 +20,11 @@ public sealed partial class InventoryService(HotelDbContext db, CurrentActor act
 {
     public async Task<IReadOnlyList<InventoryItemResponse>> ListItemsAsync(CancellationToken ct)
     {
-        var balances = db.GiaoDichKhos.GroupBy(x => new { x.KhoId, x.DanhMucHangHoaId }).Select(x => new { x.Key.KhoId, x.Key.DanhMucHangHoaId, Balance = x.Sum(v => v.SoLuongThayDoi) });
-        return await db.DanhMucHangHoas.AsNoTracking().Select(x => new InventoryItemResponse(x.Id, x.MaHang, x.TenHang, x.LoaiHang, x.DonViTinhId, x.GiaVonThamChieu, x.TheoDoiLo, x.TheoDoiHanSuDung, x.TheoDoiCaThe, balances.Where(b => b.DanhMucHangHoaId == x.Id).Sum(b => (decimal?)b.Balance) ?? 0)).ToListAsync(ct);
+        // Tổng sổ kho trực tiếp; tránh SUM lồng GROUP BY không hợp lệ trên MariaDB.
+        return await db.DanhMucHangHoas.AsNoTracking().Select(x => new InventoryItemResponse(
+            x.Id, x.MaHang, x.TenHang, x.LoaiHang, x.DonViTinhId, x.GiaVonThamChieu,
+            x.TheoDoiLo, x.TheoDoiHanSuDung, x.TheoDoiCaThe,
+            db.GiaoDichKhos.Where(g => g.DanhMucHangHoaId == x.Id).Sum(g => (decimal?)g.SoLuongThayDoi) ?? 0)).ToListAsync(ct);
     }
 
     public async Task<InventoryItemResponse> CreateItemAsync(CreateInventoryItemRequest r, CancellationToken ct)

@@ -14,7 +14,8 @@ public sealed class AuthState
     private readonly ProtectedSessionStorage _storage;
     private Task? _init;
 
-    public AuthState(ProtectedSessionStorage storage) => _storage = storage;
+    private readonly BookingState? _booking;
+    public AuthState(ProtectedSessionStorage storage, BookingState? booking = null) { _storage = storage; _booking = booking; }
 
     public string? Token { get; private set; }
     public string? CustomerName { get; private set; }
@@ -60,13 +61,18 @@ public sealed class AuthState
 
     public async Task SignInAsync(string token, string customerName, int expiresInSeconds)
     {
+        var previousAccount = AccountId;
         var expires = DateTime.UtcNow.AddSeconds(expiresInSeconds > 0 ? expiresInSeconds : 3600);
+        _booking?.ResetGuest();
         Apply(token, customerName, expires, notify: true);
+        if (previousAccount is not null && previousAccount != AccountId) _booking?.ClearSelection();
         try { await _storage.SetAsync(StorageKey, new StoredAuth(token, customerName, expires)); } catch { }
     }
 
     public async Task SignOutAsync()
     {
+        _booking?.ResetGuest();
+        _booking?.ClearSelection();
         Token = null; CustomerName = null; Email = null; AccountId = null; CustomerId = null; ExpiresAtUtc = null;
         try { await _storage.DeleteAsync(StorageKey); } catch { }
         Changed?.Invoke();
@@ -83,6 +89,7 @@ public sealed class AuthState
         Token = token;
         CustomerName = name;
         ExpiresAtUtc = expires;
+        AccountId = null; CustomerId = null; Email = null;
         ReadClaims(token);
         if (notify) Changed?.Invoke();
     }
