@@ -1,0 +1,25 @@
+web:
+-xóa số phòng
+-trang xác nhận đặt phòng không lấy đc sđt tk làm mặc định
+-sau khi đặt phòng app lấy sđt mặc định của tk thay vì sđt nhập trên form xác nhận đặc phòng
+-thêm mục dịch vụ trên web
+-đăng nhạp tài khác mới nhưng trang xác nhạn đặt phòng vẫn lấy thông tin cũ
+-lỗi tìm kiếm phòng theo giá, hiển thị phong sai mức giá
+- sửa logo và banner, bỏ icon trong mục chi tiết phòng.
+app:
+-đặt phòng: chi tiết booking vẫn lưu sđt mặc định 
+-nhận/trả phòng: 
+  +không xác nhận phòng được
+  +chi tiết booking: hóa đơn không cập nhật tiền cọc, tổng tiền sai không thay đổi theo số lượng ngày
+- sửa thông báo trên app	
+- buồng phòng chưa có dữ liệu
+- buồng phòng không tạo được công việc
+kho
+- không xác nhận phiếu nhập kho được, chỉnh lại tên serial
+- chỉnh sửa phiếu nhập nhưng không cập nhật
+- kho chưa dữ liệu
+- xem lại phiếu nhập xuất.
+nhân viên và phân quyền: dữ liệu up lỗi
+-chưa có chức năng hoàn tiền
+báo cáo phần dịch vụ chưa update dữ liệu
+lỗi báo cáo khung ngày/tháng/năm hiển thị ko hết
