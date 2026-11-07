@@ -15,6 +15,10 @@
       {
         "Path": "HotelAdmin.WinForms\\HotelAdmin.WinForms.csproj",
         "Action": "Start"
+      },
+      {
+        "Path": "Quanlychuoikhachsan.Api.Tests\\Quanlychuoikhachsan.Api.Tests.csproj",
+        "Action": "Start"
       }
     ]
   }

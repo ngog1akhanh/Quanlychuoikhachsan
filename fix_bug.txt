@@ -1,25 +1,76 @@
 web:
--xóa số phòng
--trang xác nhận đặt phòng không lấy đc sđt tk làm mặc định
--sau khi đặt phòng app lấy sđt mặc định của tk thay vì sđt nhập trên form xác nhận đặc phòng
--thêm mục dịch vụ trên web
--đăng nhạp tài khác mới nhưng trang xác nhạn đặt phòng vẫn lấy thông tin cũ
--lỗi tìm kiếm phòng theo giá, hiển thị phong sai mức giá
+-css cái danh mục bị lỗi
 - sửa logo và banner, bỏ icon trong mục chi tiết phòng.
+-chưa có mục đánh giá.
+-chưa mục chính sách giảm giá
 app:
--đặt phòng: chi tiết booking vẫn lưu sđt mặc định 
--nhận/trả phòng: 
-  +không xác nhận phòng được
-  +chi tiết booking: hóa đơn không cập nhật tiền cọc, tổng tiền sai không thay đổi theo số lượng ngày
-- sửa thông báo trên app	
-- buồng phòng chưa có dữ liệu
-- buồng phòng không tạo được công việc
+- đặt phòng chỉnh lại nút lọc bị che mất 1 phần	
+- xác nhận cọc bằng tay trên trang đặt phòng bị lỗi
+-Nhận/trả phòng: 
+	+lỗi logic: khi khách đến hạn trả phòng nhưng muốn gia hạn phòng tiếp, phòng đang ở đã có khách đặt trước r nhưng mục gia hạn không có chỗ đổi phòng. Mục đổi phòng chỉ đổi phòng trong hôm đó thôi nhưng khách chưa gia hạn thì không đổi phòng mới được.
+-phòng: 
+	+khi nhấn vào phòng mục đổi trạng thái không đổi sang đang bảo trì/ ngừng hoạt động được. Fix thì để lại cảnh báo tại thấy cảnh báo ok.
+	+Phòng/Loại phòng: trang thêm loại phòng thiếu số phòng, up ảnh phòng, chỉnh lại check xem sau khi thêm thì web có hiện không.
+	+Phòng/lịch phòng xem lại cách trình bày(có nhiều chỗ chưa hiểu)
+-Buồng phòng/công việc buồng phòng: 
+	+Chỉ việc của tôi?? chưa hiểu lắm
+	+ chưa phân công nhưng bấm bắt đầu thì vẫn chuyển sang trạng thái đang làm??
+	+không xem chi tiết được
+
+-Buồng phòng/ sự cố& hư hỏng: 
+	+chưa có dữ liệu mẫu
+	+file ghi nhận sự cố chỗ: do khách gây ra bị lỗi css 
+	+ ghi nhận sự cố thì ô chi phí thực tế bị hơi thừa 
+	+ ảnh minh chứng nên cho chọn file từ thiết bị
+	+ form cập nhật xử lý chỗ chuyển trạng thái sang đang xử lý thì thêm cái chuyển phòng sang trạng thái bảo trì
+	+ ghi nhận sự cố xong thì không thông báo.
+	+ không click vào xem chi tiết đc
+	+ thêm mục sửa
+
+-Dịch vụ:
+	+không xem chi tiết dịch vụ được
+	+thêm dịch vụ mới không thông báo
+
+-Hóa đơn:
+	+Hóa đơn phòng: xem chi tiết phần loại và thời gian không hiển thị hết được
+	+Hóa đơn dịch vụ:xem chi tiết phần thời gian không hiển thị hết được
+	+Phiếu cọc:
+		-Không xem chi tiết được
+		-Nút lập phiếu hoàn: để đó có tác dụng gì?? không bấm được
+	+Ca thu ngân: phần đối soát hệ thống không ghi nhận tiền khách đã thanh toán.
+
+-Chi tiết booking
+	+lỗi logic(nặng á): khách đặt phòng trước xong hủy. Chi tiết booking hiện thông tin của khách đang ở lẫn khách mới đặt. Nhìn rối với khó hiểu 	
+-khách không đến nhận phòng thì tiền cọc xử lý như nào
+
+-Hủy phòng:
+	+ sau khi hủy phòng, khi xác nhận số tiền cọc hoàn bấm ok số tiền hoàn óó nhảy về 0đ.
+	+khi lập phiếu hoàn cọc, bắt buộc tiền hoàn >0d nhưng số tiền cọc hoàn tối đa lại 0đ nên ko lập phiếu được
+	+Phiếu hoàn tiền và ca thu ngân chưa có dữ liệu
+
+-Giá phòng_chính sách:
+	+chưa có dữ liệu, thêm chính sách nhưng không có mục hiện bên web
+	+chính sách cọc, chính sách hủy, phụ thu sớm/trễ không có nút sửa
+
 kho
-- không xác nhận phiếu nhập kho được, chỉnh lại tên serial
+- không xác nhận phiếu nhập kho được
 - chỉnh sửa phiếu nhập nhưng không cập nhật
-- kho chưa dữ liệu
-- xem lại phiếu nhập xuất.
-nhân viên và phân quyền: dữ liệu up lỗi
--chưa có chức năng hoàn tiền
-báo cáo phần dịch vụ chưa update dữ liệu
-lỗi báo cáo khung ngày/tháng/năm hiển thị ko hết
+- cảnh báo tồn khô ở mục lô hàng có tác dụng gì??
+- tài sản:
+	+không xem chi tiết tài sản
+	+không có lập phiểu tài sản hả??
+
+-Danh mục: cần xem chi tiết từng loại không??
+
+-Nhân viên và phân quyền: phần Nhật kí hệ thống ID và dữ liệu bị lỗi
+
+-báo cáo: 
+	+Doanh thu: phần dịch vụ, biểu đồ không có dữ liệu
+	+HĐ theo thời gian: có hóa đơn dịch vụ nhưng biểu đồ lại ko có dữ liệu
+	+HĐ theo nhân viên: tổng thu chỉ có lễ tân thôi các chức vụ khác không có tham gia vào nên ko cần 
+	+phần dịch vụ chưa update dữ liệu
+	
+-HD theo nhân viên không có tháng hả???
+
+-tài khoản buồng phòng không có phân công nhân viên
+

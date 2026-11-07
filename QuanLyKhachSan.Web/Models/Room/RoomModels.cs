@@ -88,4 +88,16 @@ public static class HotelInfo
         ("Hủy phòng", "Khách gửi yêu cầu hủy kèm lý do, quản lý sẽ duyệt. Tiền cọc hoàn theo chính sách hủy và thời điểm gửi yêu cầu."),
         ("Đổi ngày / đổi phòng", "Khách chỉ được sửa thông tin liên hệ. Việc đổi ngày hoặc đổi phòng cần gửi yêu cầu để nhân viên xử lý."),
     };
+    public static readonly (string Tag, string Title, string Text, string Period)[] Promotions =
+{
+    ("ƯU ĐÃI", "Ở dài ngày – tiết kiệm hơn", "Giảm 10% tổng tiền phòng khi đặt từ 3 đêm liên tiếp.", "Áp dụng quanh năm"),
+    ("ƯU ĐÃI", "Đặt sớm nhận quà", "Đặt trước ngày nhận phòng 30 ngày để nhận bữa sáng cho 2 khách.", "Đến hết 31/12/2026"),
+    ("THÀNH VIÊN", "Khách hàng thân thiết", "Tích lũy điểm sau mỗi kỳ nghỉ và đổi lấy ưu đãi cho lần đặt tiếp theo.", "Dành cho tài khoản đã đăng ký"),
+};
+
+    public static readonly (string Date, string Title, string Text)[] Events =
+    {
+    ("24/12/2026", "Đêm Giáng sinh tại sảnh chính", "Âm nhạc sống, tiệc nhẹ và không gian trang trí mùa lễ hội dành cho khách lưu trú."),
+    ("31/12/2026", "Countdown chào năm mới", "Cùng đón giao thừa trên sân thượng với tầm nhìn toàn cảnh thành phố."),
+};
 }

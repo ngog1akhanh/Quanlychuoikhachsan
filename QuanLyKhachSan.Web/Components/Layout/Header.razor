@@ -3,12 +3,6 @@
 @inject AuthService AuthSvc
 @inject NavigationManager Nav
 
-<div class="topbar">
-    <div class="container">
-        <span>📍 @HotelInfo.Address</span>
-        <span>☎ <a href="tel:@HotelInfo.PhoneRaw">@HotelInfo.Phone</a> &nbsp;|&nbsp; ✉ <a href="mailto:@HotelInfo.Email">@HotelInfo.Email</a></span>
-    </div>
-</div>
 
 <header class="site-header">
     <div class="container bar">
@@ -20,7 +14,7 @@
             <NavLink href="" Match="NavLinkMatch.All">Trang chủ</NavLink>
             <NavLink href="services">Dịch vụ</NavLink>
             <NavLink href="rooms">Đặt phòng</NavLink>
-            <a href="/#chinh-sach">Thông tin &amp; chính sách</a>
+            <NavLink href="thong-tin-chinh-sach">Thông tin &amp; chính sách</NavLink>
             <NavLink href="account/bookings">Booking của tôi</NavLink>
         </nav>
 
@@ -28,8 +22,10 @@
             @if (Auth.IsAuthenticated)
             {
                 <div class="user-menu">
-                    <button class="user-menu-btn" type="button" @onclick="() => _userOpen = !_userOpen">
-                        👤 @(string.IsNullOrWhiteSpace(Auth.CustomerName) ? "Tài khoản" : Auth.CustomerName) ▾
+                    <button class="user-menu-btn" type="button" title="@UserDisplayName" @onclick="() => _userOpen = !_userOpen">
+                        <span class="user-icon">👤</span>
+                        <span class="user-name">@UserDisplayName</span>
+                        <span class="user-caret">▾</span>
                     </button>
                     @if (_userOpen)
                     {
@@ -53,7 +49,7 @@
 @code {
     private bool _menuOpen;
     private bool _userOpen;
-
+    private string UserDisplayName => string.IsNullOrWhiteSpace(Auth.CustomerName) ? "Tài khoản" : Auth.CustomerName!;
     protected override async Task OnInitializedAsync()
     {
         Auth.Changed += OnAuthChanged;
