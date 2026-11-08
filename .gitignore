@@ -363,3 +363,6 @@ MigrationBackup/
 FodyWeavers.xsd
 # Bản giải nén đối chiếu và công cụ tích hợp tạm
 /review/
+
+# Local source snapshots; Git preserves the original history.
+/_backup/

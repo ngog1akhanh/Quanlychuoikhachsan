@@ -12,6 +12,8 @@ namespace Quanlychuoikhachsan.Api.Controllers;
 public sealed record HousekeepingCreateRequest(long RoomId, long? BookingId, string Type, long? AssigneeId, string Priority, DateTime? PlannedStart, [param: StringLength(1000)] string? Note);
 public sealed record AssignTaskRequest(long EmployeeId);
 public sealed record ResolveConditionRequest(string Status, decimal ActualCost, bool ReleaseMaintenance);
+public sealed record EditConditionRequest(long? BookingId, [param: Required, StringLength(40)] string Type, string Severity,
+    [param: Required, StringLength(1500)] string Description, decimal EstimatedCost, bool CausedByGuest, [param: StringLength(1000)] string? Evidence);
 
 [ApiController, Authorize, Route("v1")]
 public sealed class HousekeepingOperationsController(HotelDbContext db, CurrentActor actor) : ControllerBase
@@ -67,6 +69,33 @@ public sealed class HousekeepingOperationsController(HotelDbContext db, CurrentA
     }
     [HttpGet("room-conditions"), RequirePermission("HOUSEKEEPING_READ")]
     public async Task<IActionResult> Conditions([FromQuery] ListQuery q, long? roomId, long? bookingId, CancellationToken ct) => Ok(await db.TinhTrangPhongs.AsNoTracking().Where(x => (!roomId.HasValue || x.PhongId == roomId) && (!bookingId.HasValue || x.DatPhongId == bookingId) && (q.Status == null || x.TrangThaiXuLy == q.Status)).OrderByDescending(x => x.Id).PageAsync(q, ct));
+    /// <summary>Sửa thông tin sự cố (loại, mức độ, mô tả, chi phí dự kiến, booking, ảnh) khi chưa xử lý xong.</summary>
+    [HttpPut("room-conditions/{id:long}"), RequirePermission("HOUSEKEEPING_WRITE")]
+    public async Task<IActionResult> EditCondition(long id, EditConditionRequest r, CancellationToken ct)
+    {
+        Input.OneOf(r.Severity, "NHE", "TRUNG_BINH", "NGHIEM_TRONG"); Input.Money(r.EstimatedCost, "estimated_cost");
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var x = await db.TinhTrangPhongs.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException("Không tìm thấy sự cố.");
+        if (x.TrangThaiXuLy == "DA_XU_LY") throw new InvalidArgumentException("Sự cố đã xử lý xong, không sửa được nữa.");
+        if (r.BookingId.HasValue && !await db.ChiTietDatPhongs.AnyAsync(d => d.DatPhongId == r.BookingId && d.PhongId == x.PhongId, ct))
+            throw new InvalidArgumentException("Booking đã chọn không có phòng này.");
+        if (r.CausedByGuest && !r.BookingId.HasValue) throw new InvalidArgumentException("Sự cố do khách gây ra cần chọn booking.");
+        // Đã chốt hóa đơn phòng thì không đổi phần bồi thường của khách nữa.
+        var guestBefore = x.DoKhachGayRa ? x.DatPhongId : null; var guestAfter = r.CausedByGuest ? r.BookingId : null;
+        var chargeChanged = guestBefore != guestAfter && x.ChiPhiThucTe > 0;
+        foreach (var bookingId in new[] { guestBefore, guestAfter }.Where(b => b.HasValue).Distinct())
+            if (chargeChanged && await db.HoaDonPhongs.AnyAsync(i => i.DatPhongId == bookingId && i.TrangThai != "NHAP" && i.TrangThai != "DA_HUY", ct))
+                throw new InvalidArgumentException("Hóa đơn của booking đã chốt nên không đổi được phần bồi thường; hủy hóa đơn rồi lập lại trước.");
+        x.DatPhongId = r.BookingId; x.LoaiTinhTrang = r.Type; x.MoTa = r.Description; x.ChiPhiDuKien = r.EstimatedCost; x.DoKhachGayRa = r.CausedByGuest;
+        x.AnhMinhChung = string.IsNullOrWhiteSpace(r.Evidence) ? null : r.Evidence.Trim();
+        if (r.Severity == "NGHIEM_TRONG" && x.MucDo != "NGHIEM_TRONG")
+        {
+            var room = await db.Phongs.SingleAsync(p => p.Id == x.PhongId, ct);
+            if (room.TrangThai is not ("DANG_O" or "BAO_TRI" or "NGUNG_SU_DUNG")) room.TrangThai = "BAO_TRI";
+        }
+        x.MucDo = r.Severity;
+        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return Ok(x);
+    }
     [HttpPatch("room-conditions/{id:long}"), RequirePermission("HOUSEKEEPING_WRITE")]
     public async Task<IActionResult> Resolve(long id, ResolveConditionRequest r, CancellationToken ct)
     {

@@ -70,9 +70,7 @@ hr { border: 0; border-top: 1px solid var(--ln); margin: 18px 0; }
 .sticky-side { position: sticky; top: 88px; }
 
 /* ---------- header ---------- */
-.topbar { background: #071d35; color: #b9c8da; font-size: 13px; }
-.topbar .container { display: flex; justify-content: space-between; padding-top: 6px; padding-bottom: 6px; gap: 12px; flex-wrap: wrap; }
-.topbar a { color: #dbe6f2; }
+
 .site-header { background: var(--navy); color: #fff; position: sticky; top: 0; z-index: 40; box-shadow: 0 2px 8px rgba(0,0,0,.2); }
 .site-header .bar { display: flex; align-items: center; gap: 22px; padding-top: 12px; padding-bottom: 12px; }
 .logo { display: flex; align-items: center; gap: 10px; color: var(--gold); font-family: var(--font-head); font-size: 22px; font-weight: 700; letter-spacing: .5px; }
@@ -223,8 +221,6 @@ table.table { width: 100%; border-collapse: collapse; font-size: 14px; }
 body { background: var(--bg); }
 h1, h2, h3, h4 { color: var(--navy); }
 a { color: var(--navy-3); }
-.topbar { background: #203F30; color: #DCE9DF; }
-.topbar a { color: #F1F8D9; }
 .site-header { background: rgba(255,255,255,.97); box-shadow: 0 1px 0 rgba(47,93,69,.10), 0 8px 24px rgba(37,66,48,.04); backdrop-filter: blur(14px); }
 .logo { color: var(--navy); }
 .logo:hover { color: var(--navy-3); }
@@ -247,3 +243,378 @@ a { color: var(--navy-3); }
 .site-footer { background: #203F30; }
 .site-footer h4 { color: #D9EEA0; }
 .footer-bottom { border-color: rgba(255,255,255,.14); }
+/* ===== Header: menu không xuống hàng, tên tài khoản dài tự cắt ===== */
+html {
+    scroll-behavior: smooth;
+}
+
+.site-header .bar {
+    flex-wrap: nowrap;
+    gap: 16px;
+}
+
+.logo {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+.main-nav {
+    flex: 1 1 auto;
+    min-width: 0;
+    flex-wrap: nowrap;
+    justify-content: center;
+    gap: 2px;
+}
+
+    .main-nav a {
+        white-space: nowrap;
+        padding: 8px 14px;
+    }
+
+.header-actions {
+    flex-shrink: 0;
+    white-space: nowrap;
+}
+
+    .header-actions .btn {
+        white-space: nowrap;
+    }
+
+.user-menu-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 220px;
+}
+
+    .user-menu-btn .user-name {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .user-menu-btn .user-icon, .user-menu-btn .user-caret {
+        flex: 0 0 auto;
+    }
+
+.user-menu-list a, .user-menu-list button {
+    white-space: nowrap;
+}
+
+@media (max-width: 1240px) {
+    .site-header .bar {
+        gap: 10px;
+    }
+
+    .logo {
+        font-size: 20px;
+    }
+
+    .main-nav a {
+        padding: 8px 10px;
+        font-size: 14.5px;
+    }
+
+    .user-menu-btn {
+        max-width: 160px;
+    }
+}
+
+@media (max-width: 1060px) {
+    .nav-toggle {
+        display: block;
+        margin-left: auto;
+    }
+
+    .main-nav {
+        display: none;
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 100%;
+        background: #fff;
+        flex-direction: column;
+        align-items: stretch;
+        padding: 8px 16px 14px;
+        box-shadow: var(--shadow-lg);
+    }
+
+        .main-nav.open {
+            display: flex;
+        }
+
+        .main-nav a {
+            padding: 12px;
+        }
+
+    .site-header .container.bar {
+        position: relative;
+    }
+
+    .nav-toggle ~ .header-actions {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 560px) {
+    .user-menu-btn .user-name {
+        display: none;
+    }
+
+    .user-menu-btn {
+        padding: 6px 12px;
+    }
+
+    .logo {
+        font-size: 17px;
+    }
+
+        .logo img {
+            width: 32px;
+            height: 32px;
+        }
+}
+
+/* ===== Trang Thông tin & chính sách ===== */
+.info-page .section-head h1 {
+    margin: 9px 0 12px;
+}
+
+.info-tabs {
+    position: sticky;
+    top: 70px;
+    z-index: 20;
+    display: flex;
+    gap: 8px;
+    padding: 10px 0;
+    margin-bottom: 8px;
+    background: var(--bg);
+    overflow-x: auto;
+    white-space: nowrap;
+}
+
+    .info-tabs a {
+        padding: 8px 18px;
+        border-radius: 999px;
+        background: #EEF5E8;
+        color: var(--navy);
+        font-weight: 600;
+        text-decoration: none;
+    }
+
+        .info-tabs a:hover {
+            background: var(--navy);
+            color: #fff;
+        }
+
+.info-block {
+    scroll-margin-top: 130px;
+    margin: 34px 0;
+}
+
+    .info-block h2 {
+        margin-bottom: 16px;
+    }
+
+.info-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+}
+
+    .info-facts > div {
+        background: #fff;
+        border-radius: var(--radius);
+        padding: 18px;
+        box-shadow: var(--shadow);
+    }
+
+    .info-facts span {
+        display: block;
+        color: var(--mu);
+        font-size: 13px;
+        margin-bottom: 4px;
+    }
+
+.info-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+}
+
+.info-card {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+    border: 1px solid rgba(47,93,69,.06);
+}
+
+    .info-card h3 {
+        margin: 10px 0 6px;
+        font-size: 17px;
+    }
+
+    .info-card p {
+        color: var(--mu);
+        margin: 0 0 10px;
+    }
+
+    .info-card small {
+        color: var(--navy-3);
+        font-weight: 600;
+    }
+
+.info-tag {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--gold-soft);
+    color: var(--navy);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: .5px;
+}
+
+.info-tag-event {
+    background: #E2ECFF;
+    color: #2A4E9E;
+}
+
+/* ==========================================
+   FIX LAYOUT LOGIN + FOOTER
+   Grand Saigon Hotel
+   ========================================== */
+
+/* 1. Giữ footer ở cuối màn hình (dùng wrapper .app-shell trong MainLayout) */
+body {
+    margin: 0;
+}
+
+.app-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+}
+
+.page-main {
+    flex: 1 0 auto;
+    width: 100%;
+    min-width: 0;
+}
+
+    /* 2. Căn chỉnh 4 cột footer */
+    .site-footer .footer-grid {
+        width: 100%;
+        max-width: 1180px;
+        margin-left: auto;
+        margin-right: auto;
+        display: grid;
+        grid-template-columns: 1.35fr 0.9fr 0.9fr 1.25fr;
+        align-items: start;
+        column-gap: 48px;
+        row-gap: 30px;
+        padding: 36px 16px 30px;
+    }
+
+        /* 3. Không để nội dung các cột tràn */
+        .site-footer .footer-grid > div {
+            min-width: 0;
+        }
+
+    .site-footer h4 {
+        font-size: 14px;
+        font-weight: 700;
+        margin: 0 0 12px;
+        line-height: 1.5;
+    }
+
+    .site-footer p {
+        margin: 0 0 9px;
+        line-height: 1.7;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+    }
+
+    .site-footer a {
+        display: block;
+        width: fit-content;
+        max-width: 100%;
+        padding: 4px 0;
+        line-height: 1.6;
+        font-size: 13px;
+        overflow-wrap: anywhere;
+    }
+
+    .site-footer .small {
+        font-size: 12px;
+        line-height: 1.7;
+        margin-top: 5px;
+    }
+
+/* 4. Thanh bản quyền */
+.footer-bottom {
+    width: 100%;
+    padding: 13px 16px;
+    text-align: center;
+    line-height: 1.6;
+    font-size: 12px;
+}
+
+/* 5. Căn chỉnh trang đăng nhập */
+.auth-wrap {
+    width: calc(100% - 32px);
+    max-width: 460px;
+    margin: 48px auto;
+}
+
+.auth-card {
+    width: 100%;
+    padding: 30px;
+    border-radius: 20px;
+}
+
+    .auth-card h1 {
+        margin-bottom: 10px;
+    }
+
+/* 6. Responsive tablet */
+@media (max-width: 960px) {
+    .site-footer .footer-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        column-gap: 36px;
+        row-gap: 28px;
+    }
+}
+
+/* 7. Responsive điện thoại */
+@media (max-width: 600px) {
+    .site-footer .footer-grid {
+        grid-template-columns: 1fr;
+        gap: 22px;
+        padding: 30px 20px;
+    }
+
+        .site-footer .footer-grid > div {
+            width: 100%;
+        }
+
+    .auth-wrap {
+        margin: 28px auto;
+    }
+
+    .auth-card {
+        padding: 24px 20px;
+    }
+
+    .auth-links {
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+
+    .footer-bottom {
+        padding: 12px;
+    }
+}

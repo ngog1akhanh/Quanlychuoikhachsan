@@ -46,29 +46,68 @@ public sealed class PricingPoliciesController(HotelDbContext db) : ControllerBas
     [HttpPost("deposit-policies")]
     public async Task<IActionResult> Deposit(DepositPolicyRequest r, CancellationToken ct)
     {
+        var x = new ChinhSachCoc(); ApplyDeposit(x, r); db.Add(x); await db.SaveChangesAsync(ct); return Created($"/v1/deposit-policies/{x.Id}", x);
+    }
+    /// <summary>Sửa chính sách cọc. Booking đã gắn chính sách này sẽ tính theo giá trị mới.</summary>
+    [HttpPut("deposit-policies/{id:long}")]
+    public async Task<IActionResult> UpdateDeposit(long id, DepositPolicyRequest r, CancellationToken ct)
+    {
+        var x = await db.Set<ChinhSachCoc>().FindAsync([id], ct) ?? throw new ResourceNotFoundException("Không tìm thấy chính sách cọc.");
+        ApplyDeposit(x, r); await db.SaveChangesAsync(ct); return Ok(x);
+    }
+    private static void ApplyDeposit(ChinhSachCoc x, DepositPolicyRequest r)
+    {
         Input.OneOf(r.Type, "PHAN_TRAM", "DEM_DAU", "SO_TIEN_CO_DINH"); Input.OneOf(r.Status, "HOAT_DONG", "NGUNG_HOAT_DONG"); Input.Money(r.Value, "value");
-        if (r.To < r.From || (r.Type == "PHAN_TRAM" && r.Value > 100)) throw new InvalidArgumentException("Invalid deposit policy.");
-        var x = new ChinhSachCoc { TenChinhSach = r.Name, KieuTinh = r.Type, GiaTri = r.Value, TuNgay = r.From, DenNgay = r.To, TrangThai = r.Status }; db.Add(x); await db.SaveChangesAsync(ct); return Created($"/v1/deposit-policies/{x.Id}", x);
+        if (r.To < r.From) throw new InvalidArgumentException("Ngày kết thúc phải sau ngày bắt đầu.");
+        if (r.Type == "PHAN_TRAM" && r.Value > 100) throw new InvalidArgumentException("Phần trăm cọc tối đa 100.");
+        x.TenChinhSach = r.Name; x.KieuTinh = r.Type; x.GiaTri = r.Value; x.TuNgay = r.From; x.DenNgay = r.To; x.TrangThai = r.Status;
     }
     [HttpGet("cancellation-policies"), AllowAnonymous]
     public async Task<IActionResult> Cancellations(CancellationToken ct) => Ok(await db.Set<ChinhSachHuy>().AsNoTracking().Where(x => x.TrangThai == "HOAT_DONG").Select(x => new { x.Id, x.TenChinhSach, x.MoTa, Rules = db.Set<ChiTietChinhSachHuy>().Where(d => d.ChinhSachHuyId == x.Id).OrderByDescending(d => d.SoGioTruocToiThieu).ToList() }).ToListAsync(ct));
     [HttpPost("cancellation-policies")]
     public async Task<IActionResult> Cancellation(CancellationPolicyRequest r, CancellationToken ct)
     {
+        var id = await SaveCancellation(null, r, ct); return Created($"/v1/cancellation-policies/{id}", new { Id = id });
+    }
+    /// <summary>Sửa chính sách hủy: thay toàn bộ quy tắc. Booking đã gắn chính sách này sẽ hoàn tiền theo quy tắc mới.</summary>
+    [HttpPut("cancellation-policies/{id:long}")]
+    public async Task<IActionResult> UpdateCancellation(long id, CancellationPolicyRequest r, CancellationToken ct) => Ok(new { Id = await SaveCancellation(id, r, ct) });
+    private async Task<long> SaveCancellation(long? id, CancellationPolicyRequest r, CancellationToken ct)
+    {
         Input.OneOf(r.Status, "HOAT_DONG", "NGUNG_HOAT_DONG");
-        if (r.Rules.Select(x => x.MinimumHours).Distinct().Count() != r.Rules.Count) throw new InvalidArgumentException("Cancellation thresholds must be unique.");
-        foreach (var line in r.Rules) { if (line.MinimumHours < 0 || line.RefundPercent is < 0 or > 100) throw new InvalidArgumentException("Invalid cancellation rule."); Input.Money(line.RefundPercent, "refund_percent"); Input.Money(line.FixedFee, "fixed_fee"); }
-        await using var tx = await db.Database.BeginTransactionAsync(ct); var x = new ChinhSachHuy { TenChinhSach = r.Name, MoTa = r.Description, TrangThai = r.Status }; db.Add(x); await db.SaveChangesAsync(ct);
-        db.AddRange(r.Rules.Select(d => new ChiTietChinhSachHuy { ChinhSachHuyId = x.Id, SoGioTruocToiThieu = d.MinimumHours, PhanTramHoan = d.RefundPercent, PhiHuyCoDinh = d.FixedFee })); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return Created($"/v1/cancellation-policies/{x.Id}", new { x.Id });
+        if (r.Rules.Select(x => x.MinimumHours).Distinct().Count() != r.Rules.Count) throw new InvalidArgumentException("Các mốc giờ hủy không được trùng nhau.");
+        foreach (var line in r.Rules) { if (line.MinimumHours < 0 || line.RefundPercent is < 0 or > 100) throw new InvalidArgumentException("Quy tắc hủy không hợp lệ (giờ >= 0, hoàn 0-100%)."); Input.Money(line.RefundPercent, "refund_percent"); Input.Money(line.FixedFee, "fixed_fee"); }
+        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        ChinhSachHuy x;
+        if (id.HasValue)
+        {
+            x = await db.Set<ChinhSachHuy>().SingleOrDefaultAsync(p => p.Id == id, ct) ?? throw new ResourceNotFoundException("Không tìm thấy chính sách hủy.");
+            db.RemoveRange(await db.Set<ChiTietChinhSachHuy>().Where(d => d.ChinhSachHuyId == x.Id).ToListAsync(ct));
+            x.TenChinhSach = r.Name; x.MoTa = r.Description; x.TrangThai = r.Status;
+        }
+        else { x = new ChinhSachHuy { TenChinhSach = r.Name, MoTa = r.Description, TrangThai = r.Status }; db.Add(x); }
+        await db.SaveChangesAsync(ct);
+        db.AddRange(r.Rules.Select(d => new ChiTietChinhSachHuy { ChinhSachHuyId = x.Id, SoGioTruocToiThieu = d.MinimumHours, PhanTramHoan = d.RefundPercent, PhiHuyCoDinh = d.FixedFee })); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        return x.Id;
     }
     [HttpGet("surcharge-policies")]
     public async Task<IActionResult> Surcharges(CancellationToken ct) => Ok(await db.Set<ChinhSachPhuThu>().AsNoTracking().OrderBy(x => x.TuPhut).ToListAsync(ct));
     [HttpPost("surcharge-policies")]
     public async Task<IActionResult> Surcharge(SurchargePolicyRequest r, CancellationToken ct)
     {
+        var x = new ChinhSachPhuThu(); ApplySurcharge(x, r); db.Add(x); await db.SaveChangesAsync(ct); return Created($"/v1/surcharge-policies/{x.Id}", x);
+    }
+    [HttpPut("surcharge-policies/{id:long}")]
+    public async Task<IActionResult> UpdateSurcharge(long id, SurchargePolicyRequest r, CancellationToken ct)
+    {
+        var x = await db.Set<ChinhSachPhuThu>().FindAsync([id], ct) ?? throw new ResourceNotFoundException("Không tìm thấy mức phụ thu.");
+        ApplySurcharge(x, r); await db.SaveChangesAsync(ct); return Ok(x);
+    }
+    private static void ApplySurcharge(ChinhSachPhuThu x, SurchargePolicyRequest r)
+    {
         Input.OneOf(r.Type, "NHAN_SOM", "TRA_TRE"); Input.OneOf(r.Calculation, "PHAN_TRAM", "SO_TIEN_CO_DINH"); Input.OneOf(r.Status, "HOAT_DONG", "NGUNG_HOAT_DONG"); Input.Money(r.Value, "value");
-        if (r.FromMinute < 0 || r.ToMinute < r.FromMinute) throw new InvalidArgumentException("Invalid minute range.");
-        var x = new ChinhSachPhuThu { TenChinhSach = r.Name, Loai = r.Type, TuPhut = r.FromMinute, DenPhut = r.ToMinute, KieuTinh = r.Calculation, GiaTri = r.Value, TrangThai = r.Status }; db.Add(x); await db.SaveChangesAsync(ct); return Created($"/v1/surcharge-policies/{x.Id}", x);
+        if (r.FromMinute < 0 || r.ToMinute < r.FromMinute) throw new InvalidArgumentException("Khoảng phút không hợp lệ (đến phút phải lớn hơn từ phút).");
+        x.TenChinhSach = r.Name; x.Loai = r.Type; x.TuPhut = r.FromMinute; x.DenPhut = r.ToMinute; x.KieuTinh = r.Calculation; x.GiaTri = r.Value; x.TrangThai = r.Status;
     }
     [HttpPatch("deposit-policies/{id:long}/status")]
     public async Task<IActionResult> DepositStatus(long id, StatusRequest r, CancellationToken ct) { Input.OneOf(r.Status, "HOAT_DONG", "NGUNG_HOAT_DONG"); var x = await db.Set<ChinhSachCoc>().FindAsync([id], ct) ?? throw new ResourceNotFoundException("Policy was not found."); x.TrangThai = r.Status; await db.SaveChangesAsync(ct); return NoContent(); }

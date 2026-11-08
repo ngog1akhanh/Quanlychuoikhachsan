@@ -21,7 +21,7 @@ public sealed partial class ReportsPage : ModulePage
     public ReportsPage(ApiClient api, UserSession session) : base(api, session)
     {
         lookups = new Lookups(api);
-        fromDate.Width = toDate.Width = 120;
+        fromDate.Width = toDate.Width = 155;
         var view = new FlatButton { Text = "Xem", Size = new Size(70, 36) };
         view.Click += async (_, _) => await ReloadCurrentAsync();
         var export = new FlatButton { Text = "Xuất CSV", Size = new Size(100, 36), FillColor = AppTheme.Surface, BorderColor = AppTheme.Border };
@@ -40,6 +40,7 @@ public sealed partial class ReportsPage : ModulePage
         AddTab("Nhập – xuất – tồn", Inventory());
         AddTab("Vận hành hôm nay", Operations());
         BuildTabs();
+        Toolbar.SetFlowBreak(Toolbar.Controls.OfType<SegmentedTabs>().Single(), true);
     }
 
     public override string Title => "Báo cáo";
@@ -299,7 +300,7 @@ public sealed partial class ReportsPage : ModulePage
 /// <summary>Bố cục một tab báo cáo: hàng thẻ KPI phía trên, lưới thẻ biểu đồ/bảng phía dưới.</summary>
 public sealed class ReportView : UserControl, IReloadable
 {
-    private readonly FlowLayoutPanel filters = new() { Dock = DockStyle.Top, Height = 0, WrapContents = false, BackColor = AppTheme.Background };
+    private readonly FlowLayoutPanel filters = new() { Dock = DockStyle.Top, Height = 0, WrapContents = true, AutoScroll = true, BackColor = AppTheme.Background };
     private readonly TableLayoutPanel kpis = new() { Dock = DockStyle.Top, Height = 140, RowCount = 1, BackColor = AppTheme.Background };
     private readonly TableLayoutPanel body = new() { Dock = DockStyle.Fill, BackColor = AppTheme.Background };
     private Control? last;
@@ -333,7 +334,7 @@ public sealed class ReportView : UserControl, IReloadable
 
     public void AddFilter(Control control)
     {
-        filters.Height = 46;
+        filters.Height = 88;
         control.Margin = new Padding(0, control is Label ? 12 : 6, 8, 0);
         filters.Controls.Add(control);
     }

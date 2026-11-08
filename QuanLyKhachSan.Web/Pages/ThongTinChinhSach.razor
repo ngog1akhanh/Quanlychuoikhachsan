@@ -1,0 +1,72 @@
+﻿@page "/thong-tin-chinh-sach"
+
+<PageTitle>Thông tin &amp; chính sách – @HotelInfo.Name</PageTitle>
+
+<section class="container section info-page">
+    <div class="section-head">
+        <div class="section-kicker">AN TÂM TRƯỚC MỖI CHUYẾN ĐI</div>
+        <h1>Thông tin &amp; chính sách</h1>
+        <p>Thông tin khách sạn, chính sách đặt phòng, ưu đãi và sự kiện đặc biệt được cập nhật tại đây.</p>
+    </div>
+
+    <nav class="info-tabs" aria-label="Mục lục">
+        <a href="thong-tin-chinh-sach#thong-tin">Thông tin</a>
+        <a href="thong-tin-chinh-sach#chinh-sach">Chính sách</a>
+        <a href="thong-tin-chinh-sach#uu-dai">Ưu đãi</a>
+        <a href="thong-tin-chinh-sach#su-kien">Sự kiện</a>
+    </nav>
+
+    <section id="thong-tin" class="info-block">
+        <h2>Thông tin khách sạn</h2>
+        <div class="info-facts">
+            <div><span>Địa chỉ</span><strong>@HotelInfo.Address</strong></div>
+            <div><span>Nhận phòng</span><strong>Từ @HotelInfo.CheckInTime</strong></div>
+            <div><span>Trả phòng</span><strong>Trước @HotelInfo.CheckOutTime</strong></div>
+        </div>
+    </section>
+
+    <section id="chinh-sach" class="info-block">
+        <h2>Chính sách</h2>
+        <div class="policy-grid">
+            @foreach (var p in HotelInfo.Policies)
+            {
+                <div class="policy-item"><span class="policy-mark">✳</span><h3>@p.Title</h3><p>@p.Text</p></div>
+            }
+        </div>
+    </section>
+
+    <section id="uu-dai" class="info-block">
+        <h2>Ưu đãi</h2>
+        <div class="info-cards">
+            @foreach (var o in HotelInfo.Promotions)
+            {
+                <article class="info-card">
+                    <span class="info-tag">@o.Tag</span>
+                    <h3>@o.Title</h3>
+                    <p>@o.Text</p>
+                    <small>@o.Period</small>
+                </article>
+            }
+        </div>
+        <a class="btn btn-primary mt-2" href="rooms">Đặt phòng ngay</a>
+    </section>
+
+    <section id="su-kien" class="info-block">
+        <h2>Sự kiện đặc biệt</h2>
+        <div class="info-cards">
+            @foreach (var e in HotelInfo.Events)
+            {
+                <article class="info-card">
+                    <span class="info-tag info-tag-event">@e.Date</span>
+                    <h3>@e.Title</h3>
+                    <p>@e.Text</p>
+                </article>
+            }
+        </div>
+    </section>
+
+    <div class="contact-ribbon">
+        <div><span class="section-kicker">CẦN HỖ TRỢ?</span><h3>Chúng tôi luôn sẵn sàng giúp bạn.</h3><p>@HotelInfo.Address</p></div>
+        <div class="contact-actions"><a href="tel:@HotelInfo.PhoneRaw">☎ @HotelInfo.Phone</a><a href="mailto:@HotelInfo.Email">✉ Gửi email</a></div>
+    </div>
+</section>

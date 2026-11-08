@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1800 820" preserveAspectRatio="xMidYMid slice">
+<defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#afbaa5"/><stop offset="1" stop-color="#f3e3bd"/></linearGradient><pattern id="windows" width="90" height="115" patternUnits="userSpaceOnUse"><rect x="12" y="10" width="64" height="88" rx="2" fill="#294b42"/><path d="M44 10v88M12 66h64" stroke="#c8ae7e" stroke-width="3"/><path d="M17 15h20v46H17" fill="#e3cc91" opacity=".6"/></pattern></defs>
+<rect width="1800" height="820" fill="url(#sky)"/><circle cx="1370" cy="170" r="90" fill="#fff1c6" opacity=".8"/><path d="M0 590h1800v230H0" fill="#496451"/>
+<path d="M800 210l410-100 410 100v485H800z" fill="#d8ceb4"/><path d="M795 214l415-111 420 111" stroke="#41594a" stroke-width="20" fill="none"/>
+<rect x="845" y="239" width="720" height="355" fill="url(#windows)"/><path d="M760 605h920v100H760z" fill="#d8ceb4"/><rect x="1100" y="570" width="210" height="135" fill="#294b42"/><path d="M1205 570v135" stroke="#c8ae7e" stroke-width="4"/>
+<path d="M0 755h1800v65H0" fill="#263f34"/><path d="M1150 708h110l260 112H890z" fill="#e6d7b8"/><g fill="#284f3c"><ellipse cx="740" cy="620" rx="65" ry="100"/><ellipse cx="1665" cy="620" rx="70" ry="108"/><ellipse cx="590" cy="670" rx="135" ry="70"/><ellipse cx="1770" cy="680" rx="150" ry="70"/></g>
+</svg>

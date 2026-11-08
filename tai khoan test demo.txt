@@ -4,7 +4,7 @@ THONG TIN TAI KHOAN DEMO - HE THONG QUAN LY KHACH SAN
 Luu y:
 - Cac tai khoan ben duoi duoc khai bao trong script Database/Scripts/seed_demo.sql.
 - Mat khau demo mac dinh: 12345.
-- Script seed_demo.sql phai duoc chay thanh cong sau khi tao schema/database.
+- Chi can chay 1 file Database/Install/hotel_management_full.sql (da gom schema + seed_demo).
 - Neu tai khoan da ton tai tu truoc, INSERT IGNORE co the khong cap nhat lai mat khau.
 
 1. APP QUAN LY (WinForms - nhan vien)
@@ -59,7 +59,8 @@ Mat khau: 12345
 
 3. NEU DANG NHAP KHONG DUOC
 ---------------------------
-- Kiem tra da chay script seed_demo.sql tren database hotel_management chua.
+- Kiem tra da chay Database/Install/hotel_management_full.sql (database hotel_management) chua,
+  va chuoi ket noi cua API (User Secrets) tro dung database do.
 - Kiem tra tai khoan co ton tai trong bang tai_khoan va trang_thai = 'HOAT_DONG'.
 - Vi script dung INSERT IGNORE, neu email/so dien thoai da ton tai thi du lieu cu duoc giu nguyen;
   khi do mat khau co the khong phai 12345.

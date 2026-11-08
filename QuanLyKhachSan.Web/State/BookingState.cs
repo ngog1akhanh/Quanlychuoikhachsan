@@ -8,6 +8,12 @@ namespace QuanLyKhachSan.Web.State;
 /// </summary>
 public sealed class BookingState
 {
+    public void ResetGuest()
+    {
+        Guest = new();
+        CurrentBooking = null;
+    }
+
     public RoomSearchQuery Query { get; set; } = new();
     public List<PublicRoom> Results { get; private set; } = new();
     public bool HasSearched { get; set; }

@@ -108,6 +108,6 @@ GET `/invoices/{id}/print` trả HTML in được; POST `:send` gửi đường 
 
 Worker kiểm tra mỗi phút, tối đa 100 booking hết HOLD/nhắc lịch mỗi đợt. Thông báo công việc, sự cố và thiếu hàng gửi cho tài khoản có quyền tương ứng, tôn trọng cài đặt nhận tin; cùng tập cảnh báo không gửi lại trong ngày.
 
-Chạy `dotnet test Quanlychuoikhachsan.Api.Tests`. Test Swagger xuất JSON tại `Quanlychuoikhachsan.Api.Tests/bin/Debug/net9.0/api-openapi.json`. Chạy `python scripts/export_api_docs.py` sau khi test để cập nhật bản tài liệu; `python scripts/generate_api_permissions.py` tái sinh seed quyền từ controller.
+Chạy `dotnet test Quanlychuoikhachsan.Api.Tests`. Test Swagger xuất JSON tại `Quanlychuoikhachsan.Api.Tests/bin/Debug/net10.0/api-openapi.json`. Chạy `python scripts/export_api_docs.py` sau khi test để cập nhật bản tài liệu; `python scripts/generate_api_permissions.py` tái sinh seed quyền từ controller.
 
 Các ca tự động bao phủ phân quyền/ownership, logout, nhập/xuất FEFO, serial, điều chỉnh, hóa đơn không trùng, dịch vụ, đánh giá, cọc QR/tiền đến muộn, hoàn tiền và tài sản. EF InMemory không thực thi khóa/rollback/FK của MySQL: cần kiểm thử đồng thời và migration trên database thật trước triển khai.

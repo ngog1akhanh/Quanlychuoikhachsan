@@ -151,5 +151,9 @@ public sealed partial class BookingService
         booking.TongTienDuKien = prices.Sum(x => x.GiaSauDieuChinh); booking.TongTienPhongGoc = prices.Sum(x => x.GiaCoBan);
         foreach (var d in booking.ChiTietDatPhongs) d.TienPhongDuKien = prices.Where(x => x.ChiTietDatPhongId == d.Id).Sum(x => x.GiaSauDieuChinh);
         await dbContext.SaveChangesAsync(ct);
+        // Đổi ngày/phòng khi đang ở phải cập nhật cả hóa đơn nháp, không sửa hóa đơn đã phát hành.
+        var draft = await dbContext.HoaDonPhongs.SingleOrDefaultAsync(x => x.DatPhongId == booking.Id && x.TrangThai == "NHAP", ct);
+        if (draft is not null)
+            await CreateInvoiceAsync(booking, draft.NhanVienLapId ?? await actor.EmployeeIdAsync(ct), draft.TienPhuThu, 0, ct);
     }
 }

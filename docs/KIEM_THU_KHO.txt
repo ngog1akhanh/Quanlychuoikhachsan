@@ -1,0 +1,105 @@
+================================================================================
+  KỊCH BẢN KIỂM THỬ MODULE KHO & TÀI SẢN (App quản lý)
+  Dữ liệu: chạy seed_demo.sql -> (tùy chọn) seed_operations_demo.sql -> seed_kho_demo.sql
+  Tài khoản: kho@hotel.com / 12345 (vai trò Kho) hoặc admin.com / 12345
+  Seed đã chạy thử trên MySQL 8.0 (database dựng từ Database/Install/hotel_management_full.sql), chạy 2 lần không nhân đôi dữ liệu.
+================================================================================
+
+TRẠNG THÁI SAU KHI SEED (KHO_CHINH)
+  Mặt hàng        Tồn   Tối thiểu  Ghi chú
+  Nước suối       110   48         lô NS-A 10 chai, HSD còn 5 ngày | lô NS-B 100
+  Bia lon          54   24         lô BL-OLD 6 lon ĐÃ HẾT HẠN | lô BL-B 48
+  Khăn tắm         38   40         -> cảnh báo tồn thấp
+  Dầu gội         165   100
+  Giấy vệ sinh     30   60         -> cảnh báo tồn thấp
+  Máy sấy tóc       1   0          3 cái: TS01 ở phòng 101, TS02 phòng 103 (BAO_TRI), TS03 trong kho
+  Cà phê / Bàn chải / Tivi  0      chỉ có trong phiếu nháp PN03
+  Phiếu nhập: PN01, PN02 đã xác nhận | PN03 NHÁP | PN04 ĐÃ HỦY
+  Phiếu xuất: PX01, PX02 đã xác nhận | PX03 NHÁP (12 lon bia)
+
+--------------------------------------------------------------------------------
+A. DANH MỤC
+--------------------------------------------------------------------------------
+A1  Tab Danh mục > Nhà cung cấp: thấy 3 NCC (thêm NCC_THUCPHAM).            [ ]
+A2  Thêm NCC mới, sửa SĐT -> lưu, danh sách cập nhật.                        [ ]
+A3  Tab Danh mục > Kho: thấy KHO_CHINH và KHO_TANG.                          [ ]
+A4  Mặt hàng: thêm hàng TAI_SAN mà KHÔNG tích "theo dõi cá thể" -> lưu được;
+    tích "theo dõi cá thể" cho hàng VAT_TU -> phải báo lỗi.                  [ ]
+A5  Tích "theo dõi HSD" mà bỏ "theo dõi lô" -> phải báo lỗi.                 [ ]
+A6  Ngừng / dùng lại một mặt hàng -> trạng thái đổi; hàng ngừng không chọn
+    được khi lập phiếu.                                                     [ ]
+
+--------------------------------------------------------------------------------
+B. PHIẾU NHẬP
+--------------------------------------------------------------------------------
+B1  Danh sách phiếu nhập, lọc trạng thái NHAP / DA_XAC_NHAN / DA_HUY: đúng 1/3/1
+    (tính cả DEMO-OPS-PN nếu đã chạy seed_operations_demo).                  [ ]
+B2  "Xem" PN02: tổng hàng 5.885.000, thuế 588.500, tổng 6.473.500, 4 dòng.   [ ]
+B3  "Sửa" PN03: đổi số lượng bàn chải 100 -> 120, lưu, mở lại thấy 120 và
+    tổng tiền đổi theo.                                                      [ ]
+B4  "Sửa" trên PN01 (đã xác nhận): nút không hiện / API báo không sửa được.  [ ]
+B5  "Xác nhận nhập kho" PN03, để trống mã lô cà phê -> phải báo lỗi
+    (hàng theo lô + HSD bắt buộc mã lô và HSD).                              [ ]
+B6  Nhập HSD ở quá khứ cho cà phê -> báo lỗi.                                [ ]
+B7  Nhập mã lô/HSD cho Bàn chải (hàng không theo lô) -> báo lỗi.             [ ]
+B8  Tivi SL 2, nhập 1 serial -> báo lỗi "số serial phải bằng số lượng".     [ ]
+B9  Tivi nhập serial "MS-PH2026-0001" (đã có ở máy sấy) -> báo trùng serial. [ ]
+B10 Nhập đúng: cà phê lô CF-01 HSD +180 ngày, bàn chải để trống,
+    tivi 2 serial "TV-001, TV-002" (hoặc để trống) -> xác nhận thành công.
+    Kết quả: tồn cà phê 40, bàn chải 120 (nếu đã sửa ở B3), tab Tài sản có
+    thêm 2 tivi trong kho, sổ kho có 3 dòng NHAP mới.                       [ ]
+B11 Bấm xác nhận PN03 lần nữa -> không được (phiếu đã xác nhận).            [ ]
+B12 Lập phiếu nhập mới rồi "Hủy phiếu" -> trạng thái DA_HUY, tồn không đổi.  [ ]
+
+--------------------------------------------------------------------------------
+C. PHIẾU XUẤT (FEFO)
+--------------------------------------------------------------------------------
+C1  "Xem" PX02: 30 chai nước. Sổ kho của PX02 chỉ trừ lô NS-A (hết hạn sớm).[ ]
+C2  "Xác nhận xuất kho" PX03 (12 bia): thành công; sổ kho trừ lô BL-B,
+    KHÔNG trừ lô BL-OLD đã hết hạn. Tồn bia còn 42, lô BL-B còn 36.         [ ]
+C3  (sau C2) Lập phiếu xuất 40 lon bia: tồn tổng 42 đủ, nhưng lô còn hạn chỉ 36
+    -> xác nhận phải báo không đủ tồn lô còn hạn (FEFO bỏ lô hết hạn).       [ ]
+C4  Lập phiếu xuất 15 chai nước -> lấy hết 10 chai lô NS-A rồi 5 chai NS-B. [ ]
+C5  Lập phiếu xuất có Máy sấy -> phải báo dùng chức năng chuyển tài sản.     [ ]
+C6  Sửa phiếu xuất nháp (đổi số lượng) -> mở lại thấy giá trị mới.           [ ]
+
+--------------------------------------------------------------------------------
+D. TỒN KHO, LÔ, CẢNH BÁO, SỔ KHO
+--------------------------------------------------------------------------------
+D1  Tab Tồn kho theo lô: 4 lô (NS-A, NS-B, BL-OLD, BL-B) đúng số tồn ở trên.[ ]
+D2  Tích "sắp hết hạn (30 ngày)": thấy NS-A (còn 5 ngày) và BL-OLD (-3 ngày).[ ]
+D3  Tab Mặt hàng > "Hàng dưới mức tối thiểu", chọn kho chính: Khăn tắm 38/40, Giấy VS 30/60
+    (+ Cà phê, Bàn chải nếu chưa nhập PN03).                                [ ]
+D4  "Điều chỉnh tồn" Giấy VS loại DIEU_CHINH +40 -> tồn 70, hết cảnh báo.    [ ]
+D5  Điều chỉnh loại HONG_MAT với số dương -> phải báo lỗi.                  [ ]
+D6  Sổ kho KHO_CHINH: có các dòng NHAP / XUAT / HONG_MAT / DIEU_CHINH demo. [ ]
+
+--------------------------------------------------------------------------------
+E. TÀI SẢN
+--------------------------------------------------------------------------------
+E1  Tab Tài sản: 3 máy sấy, serial MS-PH2026-0001..0003, vị trí đúng.       [ ]
+E2  Chuyển TS03 (trong kho) vào phòng 105 -> tồn máy sấy còn 0,
+    sổ kho có dòng XUAT -1.                                                  [ ]
+E3  Chuyển TS02 (đang BAO_TRI) -> phải báo chỉ tài sản tốt mới chuyển được.  [ ]
+E4  Cập nhật tình trạng TS02 về TOT -> được; rồi chuyển TS02 về KHO_TANG
+    -> tồn máy sấy ở KHO_TANG = 1.                                           [ ]
+E5  Cập nhật TS01 sang MAT -> sau đó không đổi tình trạng được nữa.         [ ]
+
+--------------------------------------------------------------------------------
+F. PHÂN QUYỀN
+--------------------------------------------------------------------------------
+F1  Đăng nhập buongphong@hotel.com (chỉ có INVENTORY_READ): xem được dữ liệu kho
+    nhưng không thấy nút Lập phiếu / Xác nhận / Điều chỉnh.                              [ ]
+F2  Đăng nhập letan@hotel.com: không vào được module Kho.                    [ ]
+
+--------------------------------------------------------------------------------
+LƯU Ý ĐÃ PHÁT HIỆN KHI ĐỌC CODE / CHẠY SEED
+--------------------------------------------------------------------------------
+- Trạng thái lô (lo_hang.trang_thai) không tự đổi theo thời gian: không có job nào
+  chuyển CON_HAN -> SAP_HET_HAN -> HET_HAN. FEFO vẫn đúng vì API lọc theo HSD,
+  nhưng cột "Trạng thái" trên tab lô có thể ghi "Còn hạn" cho lô đã hết hạn.
+- Thông báo tồn thấp (job nền) ghi nội dung dạng "Kho 1 ... Các mã cần kiểm tra: 4,5"
+  -> hiện ID thay vì tên kho/tên hàng; nên sửa khi làm phần Thông báo.
+- seed_operations_demo.sql thiếu "SET NAMES utf8mb4": chạy bằng dòng lệnh mysql
+  với bảng mã mặc định khác utf8mb4 sẽ bị lỗi font tên "Vật tư thực hành nhập xuất".
+  Chạy trong MySQL Workbench thì không bị.

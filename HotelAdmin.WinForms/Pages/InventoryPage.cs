@@ -57,7 +57,7 @@ public sealed class InventoryPage : ModulePage
     {
         warehouseNames = await lookups.NamesAsync(Lookups.WarehousesUrl, "ten_kho");
         supplierNames = await lookups.NamesAsync(Lookups.SuppliersUrl, "ten_nha_cung_cap");
-        itemNames = (await lookups.ListAsync("v1/app/inventory-items")).ToDictionary(e => J.Long(e, "id"), e => $"{J.Str(e, "code")} · {J.Str(e, "name")}");
+        itemNames = (await lookups.ListAsync("v1/app/inventory-items?pageSize=100")).ToDictionary(e => J.Long(e, "id"), e => $"{J.Str(e, "code")} · {J.Str(e, "name")}");
     }
 
     private void InvalidateCatalog()
@@ -104,7 +104,8 @@ public sealed class InventoryPage : ModulePage
             .AddAction("Điều chỉnh tồn", r => AdjustAsync(r!.Value), "STOCK_ADJUST")
             .AddAction("Ngừng / dùng lại", r => ToggleItemAsync(r!.Value), "INVENTORY_WRITE")
             .AddAction("Sửa", r => EditItemAsync(r!.Value), "INVENTORY_WRITE")
-            .AddAction("Thêm mặt hàng", _ => EditItemAsync(null), "INVENTORY_WRITE", needsRow: false, primary: true);
+            .AddAction("Thêm mặt hàng", _ => EditItemAsync(null), "INVENTORY_WRITE", needsRow: false, primary: true)
+            .AddAction("Hàng dưới mức tối thiểu", _ => ShowAlertsAsync(), needsRow: false);
         if (Session.HasPermission("INVENTORY_WRITE")) view.DefaultAction = r => EditItemAsync(r!.Value);
         return view;
     }
@@ -277,7 +278,7 @@ public sealed class InventoryPage : ModulePage
     private async Task<bool> ConfirmPurchaseAsync(JsonElement row)
     {
         var detail = await Api.GetJsonAsync($"v1/purchase-orders/{J.Long(row, "id")}");
-        var catalog = (await lookups.ListAsync("v1/app/inventory-items")).ToDictionary(e => J.Long(e, "id"));
+        var catalog = (await lookups.ListAsync(Lookups.ItemsUrl)).ToDictionary(e => J.Long(e, "id"));
         var lines = J.Items(detail, "chi_tiet");
         var editor = new LinesEditor(Math.Min(320, 60 + lines.Count * 32), false,
             new LineCol("item", "Mặt hàng", LineKind.ReadOnly, 150),
@@ -286,7 +287,7 @@ public sealed class InventoryPage : ModulePage
             new LineCol("lot_code", "Mã lô", LineKind.Text, 70),
             new LineCol("manufacture_date", "NSX", LineKind.Date, 75),
             new LineCol("expiry_date", "HSD", LineKind.Date, 75),
-            new LineCol("serials", "Serial (cách nhau dấu phẩy)", LineKind.Text, 140)) { SkipEmptyRows = false };
+            new LineCol("serials", "Số sê-ri (ngăn bằng dấu phẩy)", LineKind.Text, 140)) { SkipEmptyRows = false };
         foreach (var l in lines)
         {
             var item = catalog.GetValueOrDefault(J.Long(l, "danh_muc_hang_hoa_id"));
@@ -441,17 +442,27 @@ public sealed class InventoryPage : ModulePage
                 Col.Day("Hạn sử dụng", "han_su_dung", 75),
                 Col.Custom("Còn", e => J.Day(e, "han_su_dung") is { } d ? $"{(d - DateTime.Today).Days} ngày" : "", 60),
                 Col.Qty("Tồn lô", "balance", 60),
-                Col.Status("Trạng thái", "trang_thai", 80))
-            .AddAction("Cảnh báo tồn thấp", _ => ShowAlertsAsync(), needsRow: false);
+                Col.Status("Trạng thái", "trang_thai", 80));
         return view;
     }
 
     private async Task<bool> ShowAlertsAsync()
     {
-        if (Selected(lotWarehouse) is not { } warehouseId) { Ui.Info(Owner, "Chọn một kho cụ thể ở bộ lọc để xem cảnh báo."); return false; }
+        // Cảnh báo tính theo từng kho: mặt hàng có tồn trong kho < "Tối thiểu" khai báo ở tab Mặt hàng.
+        var warehouses = await lookups.WarehousesAsync(false);
+        if (warehouses.Count == 0) { Ui.Info(Owner, "Chưa có kho nào. Thêm kho ở tab Danh mục."); return false; }
+        var warehouseId = warehouses[0].Value;
+        if (warehouses.Count > 1)
+        {
+            var pick = new FormDialog("Hàng dưới mức tồn tối thiểu", 460, "Chọn kho cần kiểm tra.", columns: 1, okText: "Xem");
+            pick.Combo("warehouse_id", "Kho", warehouses, warehouseId, required: true);
+            if (!pick.ShowFor(Owner)) return false;
+            warehouseId = (long)pick.Values["warehouse_id"]!;
+        }
+        var name = warehouses.FirstOrDefault(w => w.Value == warehouseId).Text;
         var rows = J.Items(await Api.GetJsonAsync($"v1/inventory-alerts?warehouseId={warehouseId}"));
-        using var dlg = new DetailDialog("Mặt hàng dưới mức tồn tối thiểu", warehouseNames.GetValueOrDefault(warehouseId), 620, 480);
-        dlg.Table($"{rows.Count} mặt hàng cần nhập thêm", rows, 300,
+        using var dlg = new DetailDialog("Hàng dưới mức tồn tối thiểu", $"{name} · tồn hiện tại thấp hơn mức tối thiểu → nên lập phiếu nhập bổ sung", 640, 500);
+        dlg.Table(rows.Count == 0 ? "Không có mặt hàng nào dưới mức tối thiểu" : $"{rows.Count} mặt hàng cần nhập thêm", rows, 300,
             Col.Text("Mặt hàng", "ten_hang", 180), Col.Qty("Tồn", "balance", 60), Col.Qty("Tối thiểu", "minimum", 60));
         dlg.ShowDialog(Owner);
         return false;
@@ -507,7 +518,12 @@ public sealed class InventoryPage : ModulePage
                 Col.Status("Tình trạng", "condition", 75))
             .AddAction("Cập nhật tình trạng", r => AssetConditionAsync(r!.Value), "ASSET_WRITE")
             .AddAction("Chuyển vị trí", r => TransferAssetAsync(r!.Value), "ASSET_WRITE", primary: true,
-                when: r => J.Str(r, "condition") is not ("MAT" or "THANH_LY"));
+                when: r => J.Str(r, "condition") is not ("MAT" or "THANH_LY"))
+            .AddDetails(r => $"Tài sản {J.Str(r, "item_name")}",
+                r => [("Mã tài sản đầy đủ", J.StrOrNull(r, "asset_code")), ("Trạng thái sử dụng", Labels.Of(J.StrOrNull(r, "usage")))]);
+        // Tester hỏi "phiếu tài sản" ở đâu: tài sản không có phiếu riêng mà sinh ra khi nhập kho hàng theo dõi cá thể.
+        view.AddFilter(Inputs.Caption("Tài sản được tạo tự động khi xác nhận phiếu nhập có mặt hàng \"theo dõi cá thể\" (mỗi serial = 1 tài sản). Không có phiếu tài sản riêng.",
+            AppTheme.Small, AppTheme.TextMuted));
         return view;
     }
 

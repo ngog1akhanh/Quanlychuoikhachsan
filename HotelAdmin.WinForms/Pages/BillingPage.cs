@@ -245,7 +245,10 @@ public sealed class BillingPage : ModulePage
                 Col.Status("Trạng thái", "status", 85))
             .AddAction("Lập phiếu hoàn", r => CreateRefundAsync(Owner, "deposit_id", J.Long(r!.Value, "id"), J.Dec(r.Value, "refundable"),
                     $"Hoàn cọc booking {J.Str(r.Value, "booking_code")}"), "REFUND_WRITE",
-                when: r => J.Dec(r, "refundable") > 0 && J.Str(r, "booking_status") is "DA_HUY" or "DA_TRA");
+                when: r => J.Dec(r, "refundable") > 0 && J.Str(r, "booking_status") is "DA_HUY" or "DA_TRA")
+            .AddDetails(r => $"Phiếu cọc booking {J.Str(r, "booking_code")}",
+                r => [("Mã phiếu đầy đủ", J.StrOrNull(r, "deposit_code")), ("Cổng thanh toán", J.StrOrNull(r, "gateway")),
+                    ("Mã giao dịch", J.StrOrNull(r, "reference"))]);
         return view;
     }
 
@@ -305,6 +308,7 @@ public sealed class BillingPage : ModulePage
     private DataView Refunds()
     {
         var view = new DataView(Session, "Phiếu hoàn tiền") { Paged = true, Loader = q => Page("v1/app/refunds", q) };
+        view.AddAction("Lập phiếu hoàn cọc", _ => ChooseDepositRefundAsync(), "REFUND_WRITE", needsRow: false);
         view.AddStatusFilter("CHO_XU_LY", "CHO_XU_LY", "THANH_CONG", "DA_HUY")
             .Columns(
                 Col.Custom("Mã phiếu", e => Short(J.Str(e, "refund_code")), 85),
@@ -334,6 +338,18 @@ public sealed class BillingPage : ModulePage
         if (!dlg.ShowFor(owner)) return false;
         Ui.Info(owner, "Đã lập phiếu hoàn. Xem ở tab Phiếu hoàn tiền để xác nhận sau khi chi tiền.");
         return true;
+    }
+
+    private async Task<bool> ChooseDepositRefundAsync()
+    {
+        var rows = J.Items(await Api.GetJsonAsync("v1/app/deposits?pageSize=100"))
+            .Where(x => J.Dec(x, "refundable") > 0 && J.Str(x, "booking_status") is "DA_HUY" or "DA_TRA").ToList();
+        if (rows.Count == 0) { Ui.Info(Owner, "Chưa có cọc còn dư của booking đã hủy/trả phòng. Có thể lập phiếu từ tab Phiếu cọc; yêu cầu hủy được duyệt cũng tự tạo phiếu hoàn."); return false; }
+        var dlg = new FormDialog("Chọn khoản cọc cần hoàn", 560, columns: 1);
+        dlg.Combo("id", "Booking / khoản cọc", rows.Select(x => ($"{J.Str(x, "booking_code")} · {J.MoneyVnd(J.Dec(x, "refundable"))}", J.Long(x, "id"))), J.Long(rows[0], "id"), required: true);
+        if (!dlg.ShowFor(Owner)) return false;
+        var selected = rows.Single(x => J.Long(x, "id") == (long)dlg.Values["id"]!);
+        return await CreateRefundAsync(Owner, "deposit_id", J.Long(selected, "id"), J.Dec(selected, "refundable"), $"Hoàn cọc booking {J.Str(selected, "booking_code")}");
     }
 
     private async Task<bool> ConfirmRefundAsync(JsonElement row)

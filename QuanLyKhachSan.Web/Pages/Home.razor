@@ -1,6 +1,7 @@
 @page "/"
 @inject NavigationManager Nav
 @inject BookingState State
+@inject RoomService Rooms
 
 <PageTitle>@HotelInfo.Name – Đặt phòng trực tuyến</PageTitle>
 
@@ -42,11 +43,12 @@
         </div>
         <a class="text-link" href="rooms">Xem tất cả phòng <span>↗</span></a>
     </div>
+    @if (_catalogError is not null) { <p role="status">@_catalogError</p> }
     <div class="grid-rooms-home">
         @foreach (var t in Highlights)
         {
             <article class="card type-card home-room-card">
-                <a class="home-room-image" href="rooms?@_query.ToQueryString()&amp;type=@t.RoomTypeCode">
+                <a class="home-room-image" href="@HighlightUrl(t)">
                     <img src="@RoomImages.Cover(t)" alt="@t.RoomTypeName" loading="lazy" />
                     <span class="image-tag">@t.RoomTypeName</span>
                     <span class="image-arrow">↗</span>
@@ -57,7 +59,7 @@
                     <p class="muted small room-teaser">@t.Description</p>
                     <div class="home-room-bottom">
                         <div><small>Giá từ</small><div class="price">@Fmt.Money(t.BaseNightlyPrice)<small>/ đêm</small></div></div>
-                        <a class="round-link" href="rooms?@_query.ToQueryString()&amp;type=@t.RoomTypeCode" aria-label="Xem @t.RoomTypeName">↗</a>
+                        <a class="round-link" href="@HighlightUrl(t)" aria-label="Xem @t.RoomTypeName">↗</a>
                     </div>
                 </div>
             </article>
@@ -99,13 +101,15 @@
 @code {
     private RoomSearchQuery _query = new();
 
-    private static readonly PublicRoom[] Highlights =
+    private List<PublicRoom> Highlights = [];
+    private string? _catalogError;
+    private string HighlightUrl(PublicRoom room) => $"rooms?{_query.ToQueryString()}&type={Uri.EscapeDataString(room.RoomTypeCode)}";
+
+    protected override async Task OnInitializedAsync()
     {
-        new(1, "", "STD", "Phòng Standard", 850_000, 0, null, null, 24, "Ấm cúng, đầy đủ tiện nghi cho chuyến công tác hoặc nghỉ ngắn ngày.", 2, 1),
-        new(2, "", "SUP", "Phòng Superior", 1_150_000, 0, null, null, 28, "Cửa sổ lớn đón nắng, khu vực tiếp khách nhỏ, phòng tắm kính.", 2, 1),
-        new(3, "", "DLX", "Phòng Deluxe", 1_650_000, 0, null, null, 36, "Nội thất gỗ sang trọng, bồn tắm nằm, ban công nhìn ra thành phố.", 2, 2),
-        new(4, "", "EXE", "Executive Suite", 3_900_000, 0, null, null, 72, "Phòng khách tách biệt, lounge riêng và dịch vụ quản gia.", 3, 2),
-    };
+        try { Highlights = await Rooms.GetHighlightsAsync(); }
+        catch (ApiException ex) { _catalogError = ex.Message; }
+    }
 
     private Task SearchAsync(RoomSearchQuery q)
     {

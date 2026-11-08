@@ -9,4 +9,6 @@ public static class HotelTime
     public static DateTime? Local(DateTime? value) => value.HasValue ? Local(value.Value) : null;
     public static DateOnly StayDate(DateTime utc) => DateOnly.FromDateTime(Local(utc));
     public static DateOnly Today => DateOnly.FromDateTime(Local(DateTime.UtcNow));
+    // Ngày lọc báo cáo là ngày khách sạn; cột thời điểm trong DB lưu UTC.
+    public static DateTime StartOfDayUtc(DateOnly date) => ToUtc(date.ToDateTime(TimeOnly.MinValue));
 }

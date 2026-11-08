@@ -38,7 +38,9 @@ public static class RoomImages
         var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         if (Directory.Exists(dir))
         {
-            foreach (var f in Directory.GetFiles(dir).OrderBy(x => x, StringComparer.OrdinalIgnoreCase))
+            foreach (var f in Directory.GetFiles(dir).OrderBy(x => Path.GetFileNameWithoutExtension(x).Split('-')[0], StringComparer.OrdinalIgnoreCase)
+                .ThenBy(x => int.TryParse(Path.GetFileNameWithoutExtension(x).Split('-')[^1], out var number) ? number : int.MaxValue)
+                .ThenBy(x => x, StringComparer.OrdinalIgnoreCase))
             {
                 if (!Exts.Contains(Path.GetExtension(f), StringComparer.OrdinalIgnoreCase)) continue;
                 var name = Path.GetFileNameWithoutExtension(f);
@@ -58,20 +60,25 @@ public static class RoomImages
         return h % TypeCount;
     }
 
+
     private static List<string>? Photos(string code)
-        => _photos.TryGetValue(code, out var l) && l.Count > 0 ? l
-         : _photos.TryGetValue("default", out var d) && d.Count > 0 ? d : null;
+    {
+        if (_photos.TryGetValue(code, out var photos) && photos.Count > 0) return photos;
+        // The integrated database calls this class SUITE; LMT supplies Executive Suite photos as EXE.
+        if (code.Equals("SUITE", StringComparison.OrdinalIgnoreCase) && _photos.TryGetValue("exe", out photos) && photos.Count > 0) return photos;
+        return _photos.TryGetValue("default", out photos) && photos.Count > 0 ? photos : null;
+    }
 
     public static string Cover(PublicRoom r) => Gallery(r)[0];
+
 
     public static IReadOnlyList<string> Gallery(PublicRoom r)
     {
         var photos = Photos(r.RoomTypeCode);
         if (photos is not null)
         {
-            // Xoay vòng theo phòng để các phòng cùng loại không giống hệt nhau
-            var shift = (int)(r.Id % photos.Count);
-            return photos.Skip(shift).Concat(photos.Take(shift)).ToList();
+            // One stable cover/gallery per class, independent of the assigned physical room.
+            return photos.ToArray();
         }
         var i = Idx(r.RoomTypeCode);
         return new[]

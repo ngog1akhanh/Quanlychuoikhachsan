@@ -307,6 +307,9 @@ CREATE TABLE dat_phong (
   kenh_dat VARCHAR(30) NOT NULL DEFAULT 'WEB', -- WEB/QUAY/DIEN_THOAI
   trang_thai VARCHAR(30) NOT NULL DEFAULT 'CHO_COC',
   yeu_cau_dac_biet VARCHAR(1000) NULL,
+  contact_name VARCHAR(120) NULL,
+  contact_phone VARCHAR(20) NULL,
+  contact_email VARCHAR(150) NULL,
   tong_tien_phong_goc DECIMAL(15,2) NOT NULL DEFAULT 0,
   tong_tien_du_kien DECIMAL(15,2) NOT NULL DEFAULT 0,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

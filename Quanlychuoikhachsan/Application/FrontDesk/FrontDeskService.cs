@@ -34,8 +34,8 @@ public sealed partial class FrontDeskService(HotelDbContext db, BookingService b
         {
             var text = query.Q.Trim();
             q = q.Where(x => x.MaDatPhong.Contains(text)
-                || x.KhachHang.HoTen.Contains(text)
-                || (x.KhachHang.SoDienThoai != null && x.KhachHang.SoDienThoai.Contains(text))
+                || (x.ContactName ?? x.KhachHang.HoTen).Contains(text)
+                || ((x.ContactPhone ?? x.KhachHang.SoDienThoai) != null && (x.ContactPhone ?? x.KhachHang.SoDienThoai)!.Contains(text))
                 || x.ChiTietDatPhongs.Any(d => d.Phong.SoPhong == text));
         }
 
@@ -57,7 +57,7 @@ public sealed partial class FrontDeskService(HotelDbContext db, BookingService b
 
         var c = booking.KhachHang;
         var stays = await db.DatPhongs.CountAsync(x => x.KhachHangId == c.Id && x.TrangThai == "DA_TRA", ct);
-        var customer = new FrontDeskCustomer(c.Id, c.MaKhachHang, c.HoTen, c.SoDienThoai, c.Email, c.CccdHoChieu, c.DiaChi, stays);
+        var customer = new FrontDeskCustomer(c.Id, c.MaKhachHang, booking.ContactName ?? c.HoTen, booking.ContactPhone ?? c.SoDienThoai, booking.ContactEmail ?? c.Email, c.CccdHoChieu, c.DiaChi, stays);
 
         var details = booking.ChiTietDatPhongs.OrderBy(d => d.Phong.SoPhong).ToList();
         var detailIds = details.Select(d => d.Id).ToArray();
@@ -191,8 +191,8 @@ public sealed partial class FrontDeskService(HotelDbContext db, BookingService b
             x.TrangThai,
             x.KenhDat,
             x.KhachHangId,
-            CustomerName = x.KhachHang.HoTen,
-            CustomerPhone = x.KhachHang.SoDienThoai,
+            CustomerName = x.ContactName ?? x.KhachHang.HoTen,
+            CustomerPhone = x.ContactPhone ?? x.KhachHang.SoDienThoai,
             Rooms = x.ChiTietDatPhongs.OrderBy(d => d.Phong.SoPhong).Select(d => d.Phong.SoPhong).ToList(),
             x.DuKienNhan,
             x.DuKienTra,

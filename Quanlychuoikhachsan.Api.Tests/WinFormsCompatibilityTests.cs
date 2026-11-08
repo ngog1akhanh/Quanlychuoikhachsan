@@ -64,6 +64,25 @@ public sealed class WinFormsCompatibilityTests
     }
 
     [Fact]
+    public async Task Extending_active_stay_refreshes_draft_total_and_preserves_deposit()
+    {
+        await using var f = new ApiFactory();
+        await GrantDeskAsync(f);
+        var (_, client) = Client(f);
+        var booking = await client.CreateDeskBookingAsync(Booking(deposit: new(1, 60, Reference: "extension-deposit")));
+        var guest = new StayGuestDto(null, booking.Rooms[0].DetailId, "Guest", null, null, "CCCD", "123456789", "VN", true);
+        booking = await client.CheckInAsync(booking.Summary.Id, new([guest]));
+        var original = Assert.Single(booking.Invoices);
+        await client.ChangeDatesAsync(booking.Summary.Id, new(booking.Summary.CheckIn, booking.Summary.CheckOut.AddDays(1), "Thêm một đêm"));
+        var updated = await client.GetBookingDetailAsync(booking.Summary.Id);
+        var draft = Assert.Single(updated.Invoices);
+        Assert.True(draft.Total > original.Total);
+        Assert.Equal(updated.Summary.Total, draft.Total);
+        Assert.Equal(60m, draft.DepositApplied);
+        Assert.Equal(draft.Total - 60m, draft.Due);
+    }
+
+    [Fact]
     public async Task Real_WinForms_client_completes_one_invoice_checkout_without_duplicate_money_or_tasks()
     {
         await using var f = new ApiFactory();

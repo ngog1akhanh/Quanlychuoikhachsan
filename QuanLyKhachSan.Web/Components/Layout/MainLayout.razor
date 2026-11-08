@@ -1,13 +1,15 @@
 @inherits LayoutComponentBase
 @inject AuthState Auth
 
-<Header />
+<div class="app-shell">
+    <Header />
 
-<main class="page-main">
-    @Body
-</main>
+    <main class="page-main">
+        @Body
+    </main>
 
-<Footer />
+    <Footer />
+</div>
 
 <div id="blazor-error-ui">
     Đã xảy ra lỗi không mong muốn.
@@ -18,7 +20,6 @@
 @code {
     protected override async Task OnInitializedAsync()
     {
-        // Khôi phục phiên đăng nhập (sessionStorage) ngay khi layout khởi tạo.
         await Auth.EnsureInitializedAsync();
     }
 }

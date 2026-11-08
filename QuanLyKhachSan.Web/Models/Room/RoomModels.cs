@@ -13,11 +13,22 @@ public sealed record PublicRoom(
     decimal? AreaM2,
     string? Description,
     int MaxAdults,
-    int MaxChildren)
+    int MaxChildren,
+    IReadOnlyList<QuotedNight>? NightPrices = null,
+    string? BedDescription = null)
 {
     /// <summary>Giá 1 đêm = giá cơ bản + phụ thu riêng của phòng.</summary>
+    public string BedLabel => string.IsNullOrWhiteSpace(BedDescription) ? "Đang cập nhật loại giường" : BedDescription;
+    public string VariantName => RoomTypeName + (BedDescription switch
+    {
+        "1 giường đơn" => " Single", "2 giường đơn" => " Twin", "1 giường đôi" => " Double",
+        null or "" => "", _ => " · " + BedDescription
+    });
+    public string GroupKey => RoomTypeCode + "|" + BedDescription;
     public decimal UnitPrice => BaseNightlyPrice + NightSurcharge;
 }
+
+public sealed record QuotedNight(DateOnly StayDate, decimal FinalPrice);
 
 /// <summary>Điều kiện tìm phòng (dùng chung Home / RoomList).</summary>
 public sealed class RoomSearchQuery
@@ -55,15 +66,6 @@ public sealed class RoomSearchQuery
         => CheckIn == o.CheckIn && CheckOut == o.CheckOut && Adults == o.Adults && Children == o.Children;
 }
 
-/// <summary>Bộ lọc kết quả phía client (loại phòng, view, giá).</summary>
-public sealed class RoomFilterState
-{
-    public string RoomTypeCode { get; set; } = "";
-    public string ViewType { get; set; } = "";
-    public decimal MaxPrice { get; set; } = 0;     // 0 = không giới hạn
-    public string Sort { get; set; } = "price_asc"; // price_asc | price_desc
-}
-
 /// <summary>Thông tin tĩnh của khách sạn (API chưa có endpoint). Sửa theo thông tin thật.</summary>
 public static class HotelInfo
 {
@@ -86,4 +88,16 @@ public static class HotelInfo
         ("Hủy phòng", "Khách gửi yêu cầu hủy kèm lý do, quản lý sẽ duyệt. Tiền cọc hoàn theo chính sách hủy và thời điểm gửi yêu cầu."),
         ("Đổi ngày / đổi phòng", "Khách chỉ được sửa thông tin liên hệ. Việc đổi ngày hoặc đổi phòng cần gửi yêu cầu để nhân viên xử lý."),
     };
+    public static readonly (string Tag, string Title, string Text, string Period)[] Promotions =
+{
+    ("ƯU ĐÃI", "Ở dài ngày – tiết kiệm hơn", "Giảm 10% tổng tiền phòng khi đặt từ 3 đêm liên tiếp.", "Áp dụng quanh năm"),
+    ("ƯU ĐÃI", "Đặt sớm nhận quà", "Đặt trước ngày nhận phòng 30 ngày để nhận bữa sáng cho 2 khách.", "Đến hết 31/12/2026"),
+    ("THÀNH VIÊN", "Khách hàng thân thiết", "Tích lũy điểm sau mỗi kỳ nghỉ và đổi lấy ưu đãi cho lần đặt tiếp theo.", "Dành cho tài khoản đã đăng ký"),
+};
+
+    public static readonly (string Date, string Title, string Text)[] Events =
+    {
+    ("24/12/2026", "Đêm Giáng sinh tại sảnh chính", "Âm nhạc sống, tiệc nhẹ và không gian trang trí mùa lễ hội dành cho khách lưu trú."),
+    ("31/12/2026", "Countdown chào năm mới", "Cùng đón giao thừa trên sân thượng với tầm nhìn toàn cảnh thành phố."),
+};
 }

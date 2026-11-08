@@ -9,12 +9,24 @@ public sealed class RoomService
 
     public RoomService(ApiClient api) => _api = api;
 
+    private sealed record CatalogType(long Id, string MaLoaiPhong, string TenLoaiPhong, int SoNguoiLonToiDa,
+        int SoTreEmToiDa, decimal? DienTichM2, decimal GiaCoBanDem, string? MoTa);
+
+    // Trang chủ hiển thị loại phòng và giá từ DB, cùng mã lọc với trang tìm phòng.
+    public async Task<List<PublicRoom>> GetHighlightsAsync()
+    {
+        if (_api.UseMock) return MockData.Rooms.DistinctBy(x => x.RoomTypeCode).Take(4).ToList();
+        var types = await _api.GetAsync<List<CatalogType>>("v1/public/room-types");
+        return types.OrderBy(x => x.GiaCoBanDem).Take(4).Select(x => new PublicRoom(x.Id, "", x.MaLoaiPhong,
+            x.TenLoaiPhong, x.GiaCoBanDem, 0, null, null, x.DienTichM2, x.MoTa, x.SoNguoiLonToiDa, x.SoTreEmToiDa)).ToList();
+    }
+
     // ---- Dạng dữ liệu API trả về (JSON snake_case) ----
     private sealed record AvailabilityItem(RoomSummary Room, PriceQuote Quote);
     private sealed record RoomSummary(long Id, string RoomCode, string RoomNumber, string RoomTypeCode, string RoomTypeName, decimal BaseNightlyPrice);
     private sealed record NightItem(DateOnly StayDate, decimal FinalPrice);
     private sealed record PriceQuote(long RoomId, List<NightItem>? Nights, decimal Total);
-    private sealed record RoomTypeInfo(int SoNguoiLonToiDa, int SoTreEmToiDa, decimal? DienTichM2);
+    private sealed record RoomTypeInfo(int SoNguoiLonToiDa, int SoTreEmToiDa, decimal? DienTichM2, string? MoTa);
     private sealed record RoomDetail(long Id, string? Tang, string? LoaiView, string? MoTa, RoomTypeInfo? RoomType);
 
     /// <summary>
@@ -44,11 +56,13 @@ public sealed class RoomService
             finally { gate.Release(); }
 
             var nights = Math.Max(1, it.Quote.Nights?.Count ?? q.Nights);
-            var nightly = Math.Round(it.Quote.Total / nights, 0);
+            var nightly = it.Quote.Total / nights;
             return new PublicRoom(
                 it.Room.Id, it.Room.RoomNumber, it.Room.RoomTypeCode, it.Room.RoomTypeName,
                 nightly, 0m, d?.Tang, d?.LoaiView, d?.RoomType?.DienTichM2, d?.MoTa,
-                d?.RoomType?.SoNguoiLonToiDa ?? q.Adults, d?.RoomType?.SoTreEmToiDa ?? q.Children);
+                d?.RoomType?.SoNguoiLonToiDa ?? q.Adults, d?.RoomType?.SoTreEmToiDa ?? q.Children,
+                it.Quote.Nights?.Select(n => new QuotedNight(n.StayDate, n.FinalPrice)).ToList(),
+                BedConfiguration.FromDescription(d?.MoTa) ?? BedConfiguration.FromDescription(d?.RoomType?.MoTa));
         }).ToList();
 
         var rooms = await Task.WhenAll(tasks);

@@ -21,7 +21,7 @@ Backend của hệ thống quản lý khách sạn: REST API phục vụ **App q
 
 | Thành phần | Công nghệ |
 |---|---|
-| Nền tảng | ASP.NET Core .NET 9 (Web API + Razor Pages) |
+| Nền tảng | ASP.NET Core .NET 9 (Web API + Razor Pages); `RollForward=Major` nên máy chỉ có .NET 10 runtime vẫn chạy |
 | Cơ sở dữ liệu | MySQL 8 hoặc MariaDB, qua Entity Framework Core 9 + Pomelo |
 | Xác thực | JWT Bearer; quyền đọc từ bảng tài khoản – vai trò – quyền |
 | Tài liệu API | Swagger tại `/swagger` (môi trường Development) |
@@ -34,28 +34,23 @@ Thư mục trong `Quanlychuoikhachsan/`:
 | `Application` | Nghiệp vụ và DTO |
 | `Domain/Entities` | Lớp ánh xạ bảng database |
 | `Infrastructure` | Truy cập dữ liệu, xác thực, middleware, VietQR |
-| `Database/Scripts` | Script tạo database và dữ liệu mẫu |
+| `Database/Install` | File cài database duy nhất: `hotel_management_full.sql` (cấu trúc + quyền + dữ liệu demo), sinh tự động |
+| `Database/Scripts` | Script nguồn: schema, quyền, các bộ dữ liệu demo |
 
 ---
 
 ## 2. Chuẩn bị database
 
-Tạo database **mới**: mở MySQL Workbench, chạy lần lượt 5 script trong `Quanlychuoikhachsan/Database/Scripts/`.
+> Người mới, máy chưa có database: xem hướng dẫn từng bước [HUONG_DAN_CAI_DAT_TU_DAU.md](HUONG_DAN_CAI_DAT_TU_DAU.md).
 
-| Thứ tự | Script | Tác dụng |
-|---|---|---|
-| 1 | `hotel_management_final_food_inventory.sql` | Tạo database `hotel_management` và toàn bộ bảng |
-| 2 | `add_vietqr_payment_order.sql` | Bảng thanh toán VietQR cho hóa đơn |
-| 3 | `add_operational_api_support.sql` | Bảng đơn cọc VietQR |
-| 4 | `seed_api_permissions.sql` | Vai trò, quyền và phân quyền mặc định |
-| 5 | `seed_demo.sql` | Dữ liệu mẫu: 10 tài khoản, 24 phòng, ~160 booking, dịch vụ, hàng kho |
-| 6 (tùy chọn) | `seed_thong_ke.sql` | Hóa đơn lịch sử 2024–03/2026, nhiều nhân viên lập, có hóa đơn dịch vụ — cho các tab Thống kê hóa đơn |
+Dựng database **mới**: chạy **một file** `Quanlychuoikhachsan/Database/Install/hotel_management_full.sql` (Workbench: File → Open SQL Script → ⚡ Execute all). File tạo database `hotel_management` gồm schema, bảng VietQR, quyền, ràng buộc (67 bảng, 5 view, 6 vai trò, 42 quyền) **và toàn bộ dữ liệu demo**: `seed_demo`, `seed_operations_demo`, `seed_kho_demo`, `seed_thong_ke`. Không chạy thêm script nguồn sau file này.
 
-> Từ script 2 trở đi, trước khi chạy hãy **bấm đúp vào `hotel_management`** ở panel Schemas để chọn database (tên in đậm).
+- Database tên này đã tồn tại thì import dừng ở dòng đầu; muốn dựng lại thì `DROP DATABASE hotel_management;` trước.
+- Tài khoản demo nằm trong `tai khoan test demo.txt`, mật khẩu chung `12345`.
+- Chỉ muốn nạp thêm một bộ dữ liệu vào database đang có (vd. dữ liệu kho): chọn database rồi chạy riêng file seed tương ứng trong `Database/Scripts` (các seed chạy lặp được, không nhân đôi).
+- Sửa script nguồn trong `Database/Scripts` xong phải sinh lại file cài: `python scripts/build_database.py`, rồi commit.
 
-Tài khoản demo nằm trong `tai khoan test demo.txt`, mật khẩu chung `12345`.
-
-**Database đã có sẵn:** chỉ chạy các script bổ sung chưa chạy, không chạy lại script 1. Script 4 và 5 chạy lại nhiều lần được.
+**Database đang vận hành có dữ liệu thật:** không import bundle hay seed demo đè lên; cần kế hoạch nâng cấp riêng.
 
 ---
 
@@ -65,19 +60,30 @@ Tài khoản demo nằm trong `tai khoan test demo.txt`, mật khẩu chung `123
 
 | Khóa | Bắt buộc | Ý nghĩa |
 |---|:---:|---|
-| `ConnectionStrings:HotelManagement` | ✔ | Chuỗi kết nối MySQL |
+| `ConnectionStrings:HotelManagement` | ✔ | Chuỗi kết nối MySQL, `Database=hotel_management` |
 | `Jwt:SigningKey` | ✔ | Khóa ký token, tối thiểu 32 ký tự |
 | `Jwt:Issuer`, `Jwt:Audience` | ✔ | Tên phát hành / đối tượng của token |
 | `Database:ServerVersion` | | Mặc định `8.0.36-mysql`; MariaDB thì ghi đúng phiên bản, vd. `10.4.32-mariadb` |
 | `VietQR:Username`, `VietQR:Password` | | Tài khoản VietQR sandbox. Để trống → thanh toán QR chạy **chế độ demo** |
 | `VietQR:BankAccount`, `VietQR:BankCode`, `VietQR:UserBankName` | | Tài khoản nhận tiền |
-| `VietQR:Mode` | | `Auto` (mặc định) / `Demo` / `Live` – xem [THANH_TOAN_QR_COC.md](THANH_TOAN_QR_COC.md) |
+| `VietQR:Mode` | | `Auto` (mặc định) / `Demo` / `Live` |
 | `Smtp:Host`, `Smtp:Port`, `Smtp:From`, `Smtp:Username`, `Smtp:Password` | | Gửi mã đặt lại mật khẩu (port mặc định 587) |
 | `BookingMaintenance:Enabled` | | Mặc định `true`: mỗi phút hủy booking giữ chỗ hết hạn và gửi nhắc lịch |
 
 ---
 
 ## 4. Chạy và kiểm thử
+
+**Lần đầu trên máy mới:** (1) chạy `hotel_management_full.sql` như mục 2; (2) tạo user MySQL `hotel_app` / `change-me` có quyền trên `hotel_management` (đúng như `appsettings.json`) – hoặc dùng tài khoản khác qua User Secrets: Visual Studio → chuột phải project `Quanlychuoikhachsan` → **Manage User Secrets**, dán:
+
+```json
+{
+  "ConnectionStrings:HotelManagement": "Server=localhost;Port=3306;Database=hotel_management;User=root;Password=<mật khẩu MySQL>;CharSet=utf8mb4;Allow User Variables=true",
+  "Jwt:SigningKey": "<chuỗi bí mật tối thiểu 32 ký tự>"
+}
+```
+
+(3) chạy hệ thống như dưới, (4) đăng nhập App bằng `admin.com` / `12345`. Lỗi `Access denied` = sai user/mật khẩu MySQL; `Unknown database` = chưa chạy bước 1.
 
 **Cách nhanh:** nhấp đúp `chay-he-thong.bat` ở thư mục gốc. File này mở API (cổng 5005), đợi API sẵn sàng rồi mở Web (cổng 5100) và App quản lý.
 
@@ -89,7 +95,7 @@ dotnet test Quanlychuoikhachsan.Api.Tests/Quanlychuoikhachsan.Api.Tests.csproj
 dotnet run --project Quanlychuoikhachsan --launch-profile http
 ```
 
-> Luôn chạy API bằng profile **http** (cổng 5005). Profile https chuyển hướng sang cổng 7147 và làm mất header đăng nhập của website.
+> Cấu hình local dùng API profile **http** (cổng 5005). Nếu dùng HTTPS, cập nhật URL của cả web và WinForms cùng chứng chỉ phát triển, tránh phụ thuộc chuyển hướng HTTP khi xác thực.
 
 ---
 
@@ -102,7 +108,7 @@ dotnet run --project Quanlychuoikhachsan --launch-profile http
   - Danh sách mới: `?page=1&pageSize=20&search=...&status=...` → trả `items, total, page, page_size`.
   - Danh sách cũ (`/bookings`, `/invoices`, `/transactions`): `?pageSize=20&pageToken=...` → trả `items, next_page_token`.
 - Mã nhân viên thực hiện (thu tiền, xác nhận...) lấy từ tài khoản đăng nhập; trường `employee_id` gửi lên chỉ để tương thích.
-- `/v1/app/...`: các danh sách chỉ đọc đã ghép sẵn tên hiển thị cho App quản lý (xem `update_11_1.md`).
+- `/v1/app/...`: các danh sách chỉ đọc đã ghép sẵn tên hiển thị cho App quản lý.
 
 ---
 
@@ -111,7 +117,7 @@ dotnet run --project Quanlychuoikhachsan --launch-profile http
 | Nghiệp vụ | Quy tắc |
 |---|---|
 | Giữ phòng | Booking chưa đủ cọc ở trạng thái `HOLD` trong **15 phút**, quá hạn tự hủy. Khách tạo QR cọc thì giữ thêm để còn ít nhất **10 phút** |
-| Cọc QR | Đủ tiền + phòng còn giữ → `BOOKED`. Thiếu tiền hoặc hết giữ phòng → phiếu hoàn chờ xử lý. Chi tiết: [THANH_TOAN_QR_COC.md](THANH_TOAN_QR_COC.md) |
+| Cọc QR | Đủ tiền + phòng còn giữ → `BOOKED`. Thiếu tiền hoặc hết giữ phòng → phiếu hoàn chờ xử lý. |
 | Nhận phòng | Chỉ khi đã đến ngày lưu trú và mọi phòng ở trạng thái Sẵn sàng |
 | Trả phòng | 3 bước: **chốt hóa đơn → thu tiền → trả phòng**. API từ chối trả phòng khi hóa đơn chưa phát hành hoặc còn nợ |
 | Hóa đơn | Đã phát hành thì không sửa; sai thì hủy và lập lại. Gửi lại cùng `transaction_id` không bị thu hai lần |
@@ -166,8 +172,8 @@ Danh sách đầy đủ quyền của từng API: `API_ENDPOINTS.md`.
 
 ## 9. Giới hạn hiện tại
 
-- Kiểm thử tự động chạy trên database giả lập (EF InMemory); chưa kiểm thử khóa dòng, giao dịch đồng thời trên MySQL thật.
-- VietQR dùng môi trường sandbox (hoặc chế độ demo khi chưa có tài khoản); chưa có webhook, chưa gọi ngân hàng hay SMTP thật.
+- Đã chạy 66 test gồm EF InMemory và MariaDB 11.4.13, cả hai yêu cầu đặt cùng phòng đồng thời. Chưa kiểm thử tải nhiều người dùng, deadlock diện rộng hoặc chạy riêng trên MySQL.
+- Kiểm thử VietQR thay gateway bên ngoài bằng fake; chưa gọi ngân hàng hay SMTP thật.
 - Phiếu hoàn tiền chỉ ghi nhận việc đã hoàn, không ra lệnh chuyển tiền.
 - Ảnh phòng lưu bằng đường dẫn URL, chưa có chức năng tải ảnh lên.
 - Thông báo chỉ gửi vào hộp thư trong ứng dụng, chưa có push/SMS/email (trừ email đặt lại mật khẩu).
@@ -182,5 +188,4 @@ Danh sách đầy đủ quyền của từng API: `API_ENDPOINTS.md`.
 | [API_WORKFLOWS.md](API_WORKFLOWS.md) | Ví dụ gọi API theo luồng: nhập hàng, đặt phòng, thanh toán, hoàn tiền |
 | [API_FUNCTIONAL_COVERAGE.md](API_FUNCTIONAL_COVERAGE.md) | Đối chiếu chức năng trong tài liệu đồ án với API |
 | [openapi.json](openapi.json) | Import vào Postman |
-| [update_11_1.md](update_11_1.md) | Cập nhật 01/11: 8 module App quản lý, API `/v1/app` |
-| [THANH_TOAN_QR_COC.md](THANH_TOAN_QR_COC.md) | Thanh toán cọc bằng QR: luồng, chế độ demo, cấu hình, cách demo |
+| [HUONG_DAN_CAI_DAT_TU_DAU.md](HUONG_DAN_CAI_DAT_TU_DAU.md) | Cài đặt và chạy hệ thống từ đầu cho máy mới |

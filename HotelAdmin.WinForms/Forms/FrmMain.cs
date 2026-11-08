@@ -212,12 +212,78 @@ public sealed class FrmMain : Form
         var refresh = HeaderIcon(Glyph.Refresh, "Làm mới dữ liệu");
         refresh.Click += async (_, _) => await ReloadCurrentAsync();
 
+        // Chuông thông báo: hiện số chưa đọc, tự kiểm tra mỗi 30 giây; có thông báo mới thì hiện popup góc màn hình.
         var bell = HeaderIcon(Glyph.Bell, "Thông báo nội bộ");
-        bell.ShowDot = true;
-        bell.Click += (_, _) => MessageBox.Show(this,
-            "Thông báo nội bộ (mục 17.2): booking mới, yêu cầu hủy, phòng cần dọn, sự cố, tồn kho thấp.\n\n" +
-            "Backend chưa có API thông báo. Đề xuất: bảng thong_bao + SignalR hub để đẩy realtime.",
-            "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        bell.ShowDot = false;
+        long? lastSeenId = null;          // id thông báo mới nhất đã biết (null = chưa kiểm tra lần nào)
+        var bellBusy = false;
+        var inboxOpen = false;
+        HotelAdmin.Controls.NotificationToast? toast = null;
+
+        async Task OpenInboxAsync()
+        {
+            if (inboxOpen) return;
+            inboxOpen = true;
+            toast?.Close();
+            try
+            {
+                using var dialog = new Dialogs.NotificationsDialog(api, session);
+                dialog.ShowDialog(this);
+            }
+            finally { inboxOpen = false; }
+            await UpdateBellAsync(false);
+        }
+
+        async Task ShowToastAsync(int unread)
+        {
+            var items = Models.J.Items(await api.GetJsonAsync("v1/notifications?unreadOnly=true&pageSize=1"));
+            if (items.Count == 0) return;
+            var n = items[0];
+            toast?.Close();
+            toast = new HotelAdmin.Controls.NotificationToast(
+                Models.J.Str(n, "notification.loai_thong_bao"), Models.J.Str(n, "notification.tieu_de"), Models.J.Str(n, "notification.noi_dung"),
+                Models.J.Str(n, "notification.muc_do") == "QUAN_TRONG", Math.Max(0, unread - 1));
+            toast.Opened += async (_, _) => await OpenInboxAsync();
+            toast.FormClosed += (s, _) => { if (ReferenceEquals(toast, s)) toast = null; };
+            toast.ShowNear(this);
+        }
+
+        async Task UpdateBellAsync(bool allowPopup)
+        {
+            if (bellBusy) return;
+            bellBusy = true;
+            try
+            {
+                var info = await api.GetJsonAsync("v1/notifications/unread-count");
+                var count = (int)Models.J.Long(info, "count");
+                var latest = Models.J.LongOrNull(info, "latest_id") ?? 0;
+                bell.BadgeCount = count;
+                bell.ShowDot = count > 0;
+                bell.Invalidate();
+                var isNew = lastSeenId is { } seen && latest > seen;
+                if (lastSeenId is null || latest > lastSeenId) lastSeenId = latest;
+                if (allowPopup && isNew && !inboxOpen) await ShowToastAsync(count);
+            }
+            catch (ApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                // API đang chạy là bản cũ chưa có /unread-count: dùng cách cũ, chỉ hiện chấm đỏ, không báo lỗi.
+                try
+                {
+                    bell.BadgeCount = 0;
+                    bell.ShowDot = Models.J.Items(await api.GetJsonAsync("v1/notifications?unreadOnly=true&pageSize=1")).Count > 0;
+                    bell.Invalidate();
+                }
+                catch (Exception) { }
+            }
+            catch (Exception) { /* kiểm tra nền: không hiện hộp lỗi, lần sau thử lại */ }
+            finally { bellBusy = false; }
+        }
+
+        var bellTimer = new System.Windows.Forms.Timer { Interval = 30_000 };
+        bellTimer.Tick += async (_, _) => await UpdateBellAsync(true);
+        Shown += async (_, _) => { await UpdateBellAsync(false); bellTimer.Start(); };
+        FormClosed += (_, _) => { bellTimer.Stop(); bellTimer.Dispose(); toast?.Close(); };
+        bell.Click += async (_, _) => await OpenInboxAsync();
 
         var avatar = new Avatar { Text = session.Initials, Size = new Size(42, 42), Margin = new Padding(12, 0, 8, 0) };
         var who = new Panel { Size = new Size(190, 44), BackColor = AppTheme.Background, Margin = new Padding(0) };

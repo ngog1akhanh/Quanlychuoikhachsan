@@ -6,7 +6,7 @@
 /* ---------- hero + search ---------- */
 .hero {
   position: relative; color: #fff; text-align: center; padding: 84px 16px 120px;
-  background: linear-gradient(rgba(11,42,74,.55), rgba(11,42,74,.82)), url("../images/hero.svg") center/cover no-repeat, var(--navy);
+  background: linear-gradient(rgba(11,42,74,.55), rgba(11,42,74,.82)), url("../images/banner.svg") center/cover no-repeat, var(--navy);
 }
 .hero h1 { color: #fff; font-size: 42px; margin-bottom: 10px; text-shadow: 0 2px 12px rgba(0,0,0,.3); }
 .hero p { color: #e1ebf6; font-size: 18px; margin: 0; }
@@ -153,7 +153,7 @@
 /* ===== Lively guest-facing booking experience ===== */
 .booking-hero {
   min-height: 570px; position: relative; overflow: hidden; color: #fff;
-  background: linear-gradient(90deg, rgba(22,53,37,.94) 0%, rgba(31,69,48,.82) 48%, rgba(31,69,48,.20) 100%), url("../images/hero.svg") center/cover no-repeat, #2F5D45;
+  background: linear-gradient(90deg, rgba(22,53,37,.94) 0%, rgba(31,69,48,.82) 48%, rgba(31,69,48,.20) 100%), url("../images/banner.svg") center/cover no-repeat, #2F5D45;
 }
 .booking-hero::after { content: ""; position: absolute; width: 470px; height: 470px; border: 1px solid rgba(231,246,143,.28); border-radius: 50%; right: -110px; top: 45px; box-shadow: 0 0 0 55px rgba(231,246,143,.045), 0 0 0 110px rgba(231,246,143,.035); pointer-events: none; }
 .booking-hero-shade { position: absolute; inset: 0; background: radial-gradient(circle at 76% 30%, rgba(231,246,143,.16), transparent 32%); }
@@ -293,7 +293,7 @@
   background-color: #244A36;
   background-image:
     linear-gradient(90deg, rgba(20, 48, 34, .94) 0%, rgba(31, 69, 48, .82) 46%, rgba(31, 69, 48, .20) 100%),
-    url("../images/hero.svg");
+    url("../images/banner.svg");
   background-position: center;
   background-size: cover;
   background-repeat: no-repeat;
@@ -360,4 +360,40 @@
   .search-section .search-grid .btn { grid-column: auto; width: 100%; }
   .grid-rooms-home { grid-template-columns: minmax(0,1fr); }
 }
-html, body { max-width: 100%; overflow-x: hidden; }
+html, body {
+    max-width: 100%;
+}
+
+body {
+    overflow-x: clip;
+}
+
+.room-categories { display:flex; flex-wrap:wrap; gap:12px; margin:24px 0; }
+.availability-note { color:#a34823; font-size:.9rem; margin:12px 0; }
+.service-banners { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; }
+.service-banner { display:block; position:relative; overflow:hidden; border-radius:20px; color:white; background:#214b47; }
+.service-banner img { width:100%; aspect-ratio:2; object-fit:cover; display:block; transition:transform .2s; }
+.service-banner:hover img { transform:scale(1.03); }
+.service-banner>div { padding:22px 28px; }
+.service-banner h2 { color:inherit; margin:0 0 8px; }
+.service-detail { overflow:hidden; display:grid; grid-template-columns:1fr 1fr; }
+.service-detail>img { width:100%; height:100%; object-fit:cover; }
+.service-detail .card-body { padding:40px; }
+@media(max-width:700px) { .service-banners,.service-detail { grid-template-columns:1fr; } }
+
+/* One centered card per room class; bed variants stay inside the card. */
+.room-type-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; max-width:1040px; margin:28px auto 0; }
+.room-type-grid .room-card { height:100%; }
+.bed-options { display:flex; flex-wrap:wrap; gap:8px; margin:14px 0; }
+.bed-option { border:1px solid #d8e3db; background:#f5f8f4; color:#315c49; padding:8px 18px; border-radius:10px; font:inherit; font-size:.9rem; cursor:pointer; }
+.bed-option.active { background:#315c49; border-color:#315c49; color:white; }
+.bed-option:focus-visible { outline:3px solid #b8d66a; outline-offset:3px; }
+@media(max-width:700px) { .room-type-grid { grid-template-columns:1fr; max-width:480px; gap:20px; } }
+
+.service-detail { align-items:start; }
+.service-detail>img { height:auto; aspect-ratio:4/5; object-fit:cover; }
+.service-detail h2 { font-size:1.1rem; margin-top:24px; }
+.service-detail p { line-height:1.8; }
+.service-intro { font-size:1.15rem; color:#315c49; }
+.service-banner p { color:#e2eade; line-height:1.6; max-width:42ch; }
+@media(max-width:700px) { .service-detail>img { aspect-ratio:3/2; } .service-detail .card-body { padding:24px; } }

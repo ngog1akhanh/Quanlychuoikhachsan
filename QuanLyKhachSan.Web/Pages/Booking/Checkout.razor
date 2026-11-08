@@ -1,6 +1,7 @@
 @page "/checkout"
 @implements IDisposable
 @inject AuthState Auth
+@inject CustomerService Customers
 @inject BookingState State
 @inject BookingService BookingSvc
 @inject PaymentService PaymentSvc
@@ -216,8 +217,14 @@
     {
         if (!await Auth.RequireLoginAsync(Nav)) return;
 
-        if (string.IsNullOrWhiteSpace(State.Guest.FullName)) State.Guest.FullName = Auth.CustomerName ?? "";
-        if (string.IsNullOrWhiteSpace(State.Guest.Email)) State.Guest.Email = Auth.Email ?? "";
+        try
+        {
+            var profile = await Customers.GetProfileAsync();
+            if (string.IsNullOrWhiteSpace(State.Guest.FullName)) State.Guest.FullName = profile.FullName;
+            if (string.IsNullOrWhiteSpace(State.Guest.Email)) State.Guest.Email = profile.Email ?? "";
+            if (string.IsNullOrWhiteSpace(State.Guest.PhoneNumber)) State.Guest.PhoneNumber = profile.PhoneNumber ?? "";
+        }
+        catch (ApiException ex) { _error = ex.Message; }
 
         _ready = true;
         if (InPaymentStep) await EnterPaymentStepAsync();
@@ -236,7 +243,8 @@
                 State.Query.CheckOut.ToDateTime(new TimeOnly(12, 0)),
                 State.Query.Adults,
                 State.Query.Children,
-                string.IsNullOrWhiteSpace(State.Guest.SpecialRequest) ? null : State.Guest.SpecialRequest.Trim());
+                string.IsNullOrWhiteSpace(State.Guest.SpecialRequest) ? null : State.Guest.SpecialRequest.Trim(),
+                State.Guest.FullName.Trim(), State.Guest.PhoneNumber.Trim(), State.Guest.Email.Trim());
 
             State.CurrentBooking = await BookingSvc.CreateAsync(request);
             await EnterPaymentStepAsync();

@@ -22,7 +22,7 @@ using Xunit;
 
 namespace Quanlychuoikhachsan.Api.Tests;
 
-public sealed class ApiFactory : WebApplicationFactory<Program>
+public sealed class ApiFactory : WebApplicationFactory<HotelDbContext>
 {
     public const string Key = "test-only-signing-key-at-least-32-characters-long";
     private readonly string database = Guid.NewGuid().ToString();
