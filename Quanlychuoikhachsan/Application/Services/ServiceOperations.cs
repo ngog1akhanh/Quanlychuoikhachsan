@@ -48,6 +48,30 @@ public sealed class ServiceOperations(HotelDbContext db, CurrentActor actor, Not
         await notifications.SendAsync("SERVICE_REQUEST", $"Yêu cầu dịch vụ mới: {service.TenDichVu}", content, recipients, actor.AccountId, booking, ct);
     }
 
+    /// <summary>
+    /// Báo cho nhân viên làm việc với dịch vụ (quyền SERVICE_READ/SERVICE_WRITE, trừ người thao tác) khi danh mục thay đổi:
+    /// thêm dịch vụ mới đang bán, mở bán lại / ngừng bán, đổi đơn giá. Sửa mô tả, tên... không gửi để tránh làm phiền.
+    /// </summary>
+    public async Task NotifyCatalogAsync(DichVu x, bool created, string? oldStatus, decimal? oldPrice, CancellationToken ct)
+    {
+        if (notifications is null) return;
+        string? title = null;
+        if (created) title = x.TrangThai == "HOAT_DONG" ? $"Dịch vụ mới: {x.TenDichVu}" : null;
+        else if (oldStatus != x.TrangThai) title = x.TrangThai == "HOAT_DONG" ? $"Mở bán lại dịch vụ: {x.TenDichVu}" : $"Ngừng bán dịch vụ: {x.TenDichVu}";
+        else if (oldPrice != x.DonGia) title = $"Đổi giá dịch vụ: {x.TenDichVu}";
+        if (title is null) return;
+        var recipients = await db.TaiKhoanVaiTros.Where(a => a.TaiKhoan.TrangThai == "HOAT_DONG" && a.VaiTro.TrangThai == "HOAT_DONG"
+                && a.VaiTro.VaiTroQuyens.Any(p => p.Quyen.MaQuyen == "SERVICE_READ" || p.Quyen.MaQuyen == "SERVICE_WRITE"))
+            .Select(a => a.TaiKhoanId).Distinct().ToListAsync(ct);
+        recipients.Remove(actor.AccountId);
+        if (recipients.Count == 0) return;
+        var vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+        var content = $"{(string.IsNullOrWhiteSpace(x.NhomDichVu) ? "Dịch vụ" : x.NhomDichVu)} · {x.DonGia.ToString("#,0", vi)} đ/{x.DonViTinh}"
+            + (!created && oldPrice is { } p && p != x.DonGia ? $" (giá cũ {p.ToString("#,0", vi)} đ)" : "")
+            + (string.IsNullOrWhiteSpace(x.MoTa) ? "" : $" · {x.MoTa.Trim()}");
+        await notifications.SendAsync("SERVICE_CATALOG", title, content, recipients, actor.AccountId, null, ct);
+    }
+
     public async Task<object> TransitionAsync(long id, string status, CancellationToken ct)
     {
         Input.OneOf(status, "DANG_XU_LY", "HOAN_THANH", "DA_HUY");

@@ -25,8 +25,8 @@ public sealed partial class ApiClient
     public Task<RoomTypeSummary> UpdateRoomTypeAsync(long roomTypeId, UpdateRoomTypeRequest request, CancellationToken ct = default)
         => SendJsonAsync<RoomTypeSummary>(HttpMethod.Patch, $"v1/room-types/{roomTypeId}", request, ct);
 
-    public async Task CreateRoomTypeAsync(CreateRoomTypeRequest request, CancellationToken ct = default)
-        => await SendJsonAsync<ApiEnvelope<RoomTypeSummaryLite>>(HttpMethod.Post, "v1/room-types", request, ct);
+    public async Task<RoomTypeSummaryLite> CreateRoomTypeAsync(CreateRoomTypeRequest request, CancellationToken ct = default)
+        => (await SendJsonAsync<ApiEnvelope<RoomTypeSummaryLite>>(HttpMethod.Post, "v1/room-types", request, ct)).Data;
 
     public async Task CreateRoomAsync(CreateRoomRequest request, CancellationToken ct = default)
         => await SendJsonAsync<ApiEnvelope<RoomResponse>>(HttpMethod.Post, "v1/rooms", request, ct);

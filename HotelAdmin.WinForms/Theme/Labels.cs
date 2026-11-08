@@ -92,6 +92,7 @@ public static class Labels
         ["LOW_STOCK"] = ("Tồn kho thấp", Tone.Warning),
         ["EXPIRY"] = ("Hạn sử dụng", Tone.Warning),
         ["SERVICE_REQUEST"] = ("Yêu cầu dịch vụ", Tone.Info),
+        ["SERVICE_CATALOG"] = ("Danh mục dịch vụ", Tone.Info),
         ["QUAN_TRONG"] = ("Quan trọng", Tone.Danger),
         ["THONG_THUONG"] = ("Thường", Tone.Neutral),
         // Chính sách

@@ -63,7 +63,8 @@ public sealed class HousekeepingPage : ModulePage
             .AddAction("Bắt đầu", r => SetTaskStatusAsync(r!.Value, "DANG_THUC_HIEN"), "HOUSEKEEPING_WRITE",
                 when: r => J.Str(r, "status") == "CHO_XU_LY")
             .AddAction("Phân công", r => AssignAsync(r!.Value), "HOUSEKEEPING_ASSIGN", when: r => J.Str(r, "status") != "HOAN_THANH")
-            .AddAction("Tạo công việc", _ => CreateTaskAsync(), "HOUSEKEEPING_WRITE", needsRow: false);
+            .AddAction("Tạo công việc", _ => CreateTaskAsync(), "HOUSEKEEPING_WRITE", needsRow: false)
+            .AddDetails(r => $"Công việc phòng {J.Str(r, "room_number")}");
         return view;
     }
 
@@ -129,7 +130,15 @@ public sealed class HousekeepingPage : ModulePage
                 Col.Status("Xử lý", "status", 80))
             .AddAction("Cập nhật xử lý", r => ResolveAsync(r!.Value), "HOUSEKEEPING_WRITE", primary: true,
                 when: r => J.Str(r, "status") != "DA_XU_LY")
-            .AddAction("Ghi nhận sự cố", _ => ReportAsync(), "HOUSEKEEPING_WRITE", needsRow: false);
+            .AddAction("Sửa", r => EditConditionAsync(r!.Value), "HOUSEKEEPING_WRITE", when: r => J.Str(r, "status") != "DA_XU_LY")
+            .AddAction("Ghi nhận sự cố", _ => ReportAsync(), "HOUSEKEEPING_WRITE", needsRow: false)
+            .AddDetails(r => $"Sự cố phòng {J.Str(r, "room_number")}",
+                r => [("Xử lý xong lúc", J.TimeText(J.Time(r, "resolved_at"))), ("Ảnh minh chứng", J.StrOrNull(r, "evidence"))],
+                (r, dlg) =>
+                {
+                    if (Session.HasPermission("HOUSEKEEPING_WRITE") && J.Str(r, "status") != "DA_XU_LY")
+                        dlg.Action("Sửa", () => EditConditionAsync(r));
+                });
         return view;
     }
 
@@ -153,6 +162,31 @@ public sealed class HousekeepingPage : ModulePage
         dlg.Fixed("asset_id", null);
         dlg.Validator = v => (bool)v["caused_by_guest"]! && v["booking_id"] is null ? "Sự cố do khách gây ra cần chọn booking." : null;
         dlg.OnSubmit = v => Api.PostJsonAsync("v1/room-conditions", v);
+        if (!dlg.ShowFor(Owner)) return false;
+        lookups.Invalidate(Lookups.RoomBoardUrl);
+        return true;
+    }
+
+    /// <summary>Sửa thông tin sự cố chưa xử lý xong (PUT v1/room-conditions/{id}). Chi phí thực tế nhập ở "Cập nhật xử lý".</summary>
+    private async Task<bool> EditConditionAsync(JsonElement row)
+    {
+        var roomId = J.Long(row, "room_id");
+        var board = await lookups.ListAsync(Lookups.RoomBoardUrl);
+        var stays = board.Where(e => J.Long(e, "id") == roomId && J.LongOrNull(e, "current_booking_id") is not null)
+            .Select(e => ($"{J.Str(e, "current_booking_code")} · {J.Str(e, "current_guest")}", J.Long(e, "current_booking_id"))).ToList();
+        if (J.LongOrNull(row, "booking_id") is { } currentBooking && stays.All(s => s.Item2 != currentBooking))
+            stays.Insert(0, ($"{J.Str(row, "booking_code")} (đang gắn)", currentBooking));
+        var dlg = new FormDialog($"Sửa sự cố phòng {J.Str(row, "room_number")}", 600,
+            "Chuyển sang mức Nghiêm trọng sẽ đưa phòng trống vào Bảo trì. Chi phí thực tế nhập khi cập nhật xử lý.");
+        dlg.Combo("booking_id", "Booking liên quan", stays, J.LongOrNull(row, "booking_id"), allowEmpty: true, emptyText: "(Không gắn booking)", span: 2);
+        dlg.Codes("type", "Loại sự cố", J.StrOrNull(row, "type") ?? "KHAC", "HONG_THIET_BI", "HU_HONG_NOI_THAT", "MAT_DO", "VET_BAN", "KHAC");
+        dlg.Codes("severity", "Mức độ", J.StrOrNull(row, "severity") ?? "NHE", "NHE", "TRUNG_BINH", "NGHIEM_TRONG");
+        dlg.TextField("description", "Mô tả", J.StrOrNull(row, "description"), required: true, span: 2, multiline: true);
+        dlg.Money("estimated_cost", "Chi phí dự kiến", J.Dec(row, "estimated_cost"));
+        dlg.Check("caused_by_guest", "Do khách gây ra (tính bồi thường)", J.Bool(row, "caused_by_guest"));
+        dlg.TextField("evidence", "Ảnh minh chứng (đường dẫn)", J.StrOrNull(row, "evidence"), span: 2);
+        dlg.Validator = v => (bool)v["caused_by_guest"]! && v["booking_id"] is null ? "Sự cố do khách gây ra cần chọn booking." : null;
+        dlg.OnSubmit = v => Api.PutJsonAsync($"v1/room-conditions/{J.Long(row, "id")}", v);
         if (!dlg.ShowFor(Owner)) return false;
         lookups.Invalidate(Lookups.RoomBoardUrl);
         return true;

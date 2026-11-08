@@ -126,14 +126,27 @@ public sealed class RoomsPage : PageBase
         bar.Controls.AddRange([Inputs.Caption("Từ ngày", AppTheme.SmallBold, AppTheme.TextSoft), calFrom, calDays, prev, next, today]);
         foreach (Control c in bar.Controls) c.Margin = new Padding(c.Margin.Left, 4, 8, 0);
 
-        var legend = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 34, BackColor = AppTheme.Background, Padding = new Padding(0, 6, 0, 0) };
-        foreach (var code in new[] { "HOLD", "BOOKED", "DANG_O", "DA_TRA" })
+        // Chú thích màu: ô ngày tô theo trạng thái booking, cột Phòng tô đỏ/xám khi phòng bảo trì/ngừng sử dụng.
+        var legend = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 34, BackColor = AppTheme.Background, Padding = new Padding(0, 6, 0, 0), WrapContents = false };
+        legend.Controls.Add(Inputs.Caption("Chú thích:", AppTheme.SmallBold, AppTheme.TextSoft));
+        var empty = new PillLabel { Margin = new Padding(0, 0, 8, 0) };
+        empty.ApplyStatus(new StatusStyle("Trống", AppTheme.Surface, AppTheme.TextSoft));
+        legend.Controls.Add(empty);
+        foreach (var code in new[] { "HOLD", "CHO_COC", "BOOKED", "DANG_O", "DA_TRA" })
         {
             var pill = new PillLabel { Margin = new Padding(0, 0, 8, 0) };
             pill.ApplyStatus(StatusStyles.ForBooking(code));
             legend.Controls.Add(pill);
         }
-        legend.Controls.Add(Inputs.Caption("Bấm đúp vào ô để mở booking.", AppTheme.Small, AppTheme.TextMuted));
+        foreach (var code in new[] { "BAO_TRI", "NGUNG_SU_DUNG" })
+        {
+            var pill = new PillLabel { Margin = new Padding(0, 0, 8, 0) };
+            var s = StatusStyles.ForRoom(code);
+            pill.ApplyStatus(s with { Label = "Phòng " + s.Label.ToLowerInvariant() });
+            legend.Controls.Add(pill);
+        }
+        legend.Controls.Add(Inputs.Caption("Rê chuột vào ô để xem khách và ngày ở · bấm đúp để mở booking.", AppTheme.Small, AppTheme.TextMuted));
+        foreach (Control c in legend.Controls) if (c is Label) c.Margin = new Padding(0, 4, 8, 0);
 
         calendar.Dock = DockStyle.Fill;
         calendar.ReadOnly = true;
@@ -155,6 +168,7 @@ public sealed class RoomsPage : PageBase
         calendar.SelectionMode = DataGridViewSelectionMode.CellSelect;
         calendar.DefaultCellStyle.SelectionBackColor = AppTheme.LimeHover;
         calendar.DefaultCellStyle.SelectionForeColor = AppTheme.Text;
+        calendar.ShowCellToolTips = true;
         calendar.CellDoubleClick += async (_, e) => await OpenCalendarCellAsync(e.RowIndex, e.ColumnIndex);
 
         var card = new RoundedPanel { Dock = DockStyle.Fill, Padding = new Padding(12) };
@@ -372,11 +386,22 @@ public sealed class RoomsPage : PageBase
         calendar.ColumnHeadersDefaultCellStyle.WrapMode = DataGridViewTriState.True;
 
         var cells = data.Cells.ToLookup(c => c.RoomId);
+        // Khoảng ngày ở của từng booking trong mỗi phòng (theo dữ liệu đang hiển thị) để ghi vào tooltip.
+        var stays = data.Cells.GroupBy(c => (c.RoomId, c.BookingId))
+            .ToDictionary(g => g.Key, g => (First: g.Min(c => c.Date), Last: g.Max(c => c.Date)));
         foreach (var room in data.Rooms)
         {
             var rowIndex = calendar.Rows.Add();
             var row = calendar.Rows[rowIndex];
             row.Cells[0].Value = $"{room.RoomNumber} · {room.RoomTypeCode}";
+            row.Cells[0].ToolTipText = $"Phòng {room.RoomNumber} · loại {room.RoomTypeCode}" + (room.Floor is null ? "" : $" · tầng {room.Floor}")
+                + $" · {StatusStyles.ForRoom(room.Status).Label}";
+            if (room.Status is "BAO_TRI" or "NGUNG_SU_DUNG")
+            {
+                var rs = StatusStyles.ForRoom(room.Status);
+                row.Cells[0].Style.BackColor = rs.Back;
+                row.Cells[0].Style.ForeColor = rs.Fore;
+            }
             row.Tag = room;
             foreach (var cell in cells[room.Id])
             {
@@ -389,7 +414,12 @@ public sealed class RoomsPage : PageBase
                 var style = StatusStyles.ForBooking(cell.LockStatus == "HOLD" ? "HOLD" : cell.BookingStatus);
                 target.Style.BackColor = style.Back;
                 target.Style.ForeColor = style.Fore;
-                target.ToolTipText = $"{cell.BookingCode} · {cell.Guest} · {style.Label}";
+                var (first, last) = stays[(cell.RoomId, cell.BookingId)];
+                // Ô đầu/cuối khung đang xem: booking có thể bắt đầu sớm hơn / kéo dài hơn khung.
+                var start = $"{first:dd/MM/yyyy}" + (first == data.From ? " (hoặc sớm hơn)" : "");
+                var end = $"{last.AddDays(1):dd/MM/yyyy}" + (last == data.To ? " (hoặc muộn hơn)" : "");
+                target.ToolTipText = $"Khách: {cell.Guest}\nBooking: {cell.BookingCode} · {style.Label}\n"
+                    + $"Nhận phòng {start} → trả phòng {end}\nĐêm {cell.Date:dd/MM/yyyy}";
             }
         }
         calendar.ResumeLayout();

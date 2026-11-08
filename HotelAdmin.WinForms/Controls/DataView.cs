@@ -209,6 +209,41 @@ public sealed class DataView : UserControl, IReloadable
         return this;
     }
 
+    /// <summary>
+    /// Thêm nút "Xem" và bấm đúp để mở hộp "Xem chi tiết": hiện mọi cột của dòng (chữ dài không bị cắt)
+    /// cộng các trường bổ sung (extra). configure dùng để thêm nút thao tác vào hộp (vd. "Sửa").
+    /// Nếu trang đã có DefaultAction (vd. mở form sửa) thì giữ nguyên, chỉ thêm nút "Xem".
+    /// </summary>
+    public DataView AddDetails(Func<JsonElement, string> title, Func<JsonElement, IEnumerable<(string Label, string? Value)>>? extra = null,
+        Action<JsonElement, DetailDialog>? configure = null)
+    {
+        Task<bool> Show(JsonElement? r) => Task.FromResult(ShowDetails(r!.Value, title(r.Value), extra, configure));
+        AddAction("Xem", Show);
+        if (DefaultAction is null) DefaultAction = Show;
+        return this;
+    }
+
+    /// <summary>Mở hộp chi tiết của một dòng; trả true nếu một nút thao tác trong hộp đã chạy xong (cần tải lại).</summary>
+    public bool ShowDetails(JsonElement row, string title, Func<JsonElement, IEnumerable<(string Label, string? Value)>>? extra = null,
+        Action<JsonElement, DetailDialog>? configure = null)
+    {
+        var pairs = columns.Select(c => (Label: c.Header, Value: CellText(c, row)))
+            .Concat(extra?.Invoke(row) ?? Enumerable.Empty<(string Label, string? Value)>())
+            .ToArray();
+        var height = Math.Clamp(190 + (pairs.Length + 1) / 2 * 40, 320, 640);
+        using var dlg = new DetailDialog(title, null, 820, height);
+        dlg.Info(pairs);
+        configure?.Invoke(row, dlg);
+        return dlg.ShowDialog(FindForm()) == DialogResult.OK;
+    }
+
+    private static string? CellText(Col c, JsonElement row)
+    {
+        var value = c.Value(row);
+        if (c.Kind == ColKind.Status) return value is string code && code.Length > 0 ? Labels.Style(code).Label : null;
+        return value?.ToString();
+    }
+
     // ---------------- Tải dữ liệu ----------------
     public async Task ReloadAsync()
     {

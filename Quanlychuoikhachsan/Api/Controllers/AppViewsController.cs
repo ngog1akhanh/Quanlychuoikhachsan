@@ -201,7 +201,7 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
             .Select(x => new
             {
                 x.c.Id, x.c.PhongId, x.p.SoPhong, RoomStatus = x.p.TrangThai, x.c.DatPhongId, x.c.LoaiTinhTrang, x.c.MucDo, x.c.MoTa, x.c.ChiPhiDuKien, x.c.ChiPhiThucTe,
-                x.c.DoKhachGayRa, x.c.TrangThaiXuLy, x.c.GhiNhanLuc, x.c.XuLyXongLuc,
+                x.c.DoKhachGayRa, x.c.TrangThaiXuLy, x.c.GhiNhanLuc, x.c.XuLyXongLuc, x.c.AnhMinhChung,
                 BookingCode = db.Set<DatPhong>().Where(b => b.Id == x.c.DatPhongId).Select(b => b.MaDatPhong).FirstOrDefault(),
                 Reporter = db.Set<NhanVien>().Where(n => n.Id == x.c.NhanVienGhiNhanId).Select(n => n.HoTen).FirstOrDefault()
             });
@@ -209,7 +209,7 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
         {
             x.Id, RoomId = x.PhongId, RoomNumber = x.SoPhong, x.RoomStatus, BookingId = x.DatPhongId, x.BookingCode, Type = x.LoaiTinhTrang, Severity = x.MucDo,
             Description = x.MoTa, EstimatedCost = x.ChiPhiDuKien, ActualCost = x.ChiPhiThucTe, CausedByGuest = x.DoKhachGayRa, Status = x.TrangThaiXuLy,
-            ReportedBy = x.Reporter, ReportedAt = U(x.GhiNhanLuc), ResolvedAt = U(x.XuLyXongLuc)
+            ReportedBy = x.Reporter, ReportedAt = U(x.GhiNhanLuc), ResolvedAt = U(x.XuLyXongLuc), Evidence = x.AnhMinhChung
         }, ct));
     }
 

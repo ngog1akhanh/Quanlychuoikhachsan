@@ -19,12 +19,18 @@ public sealed class ServicesController(HotelDbContext db, CurrentActor actor, Se
     [HttpPost("services"), RequirePermission("SERVICE_CATALOG_WRITE")]
     public async Task<IActionResult> Create(ServiceRequest r, CancellationToken ct)
     {
-        var x = new DichVu(); Apply(x, r); db.Add(x); await db.SaveChangesAsync(ct); return Created($"/v1/services/{x.Id}", x);
+        var x = new DichVu(); Apply(x, r); db.Add(x); await db.SaveChangesAsync(ct);
+        await service.NotifyCatalogAsync(x, true, null, null, ct);
+        return Created($"/v1/services/{x.Id}", x);
     }
     [HttpPut("services/{id:long}"), RequirePermission("SERVICE_CATALOG_WRITE")]
     public async Task<IActionResult> Update(long id, ServiceRequest r, CancellationToken ct)
     {
-        var x = await db.Set<DichVu>().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException("Service was not found."); Apply(x, r); await db.SaveChangesAsync(ct); return Ok(x);
+        var x = await db.Set<DichVu>().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException("Service was not found.");
+        var (oldStatus, oldPrice) = (x.TrangThai, x.DonGia);
+        Apply(x, r); await db.SaveChangesAsync(ct);
+        await service.NotifyCatalogAsync(x, false, oldStatus, oldPrice, ct);
+        return Ok(x);
     }
     private static void Apply(DichVu x, ServiceRequest r)
     {

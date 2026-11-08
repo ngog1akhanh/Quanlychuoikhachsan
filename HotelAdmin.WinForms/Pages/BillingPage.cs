@@ -245,7 +245,10 @@ public sealed class BillingPage : ModulePage
                 Col.Status("Trạng thái", "status", 85))
             .AddAction("Lập phiếu hoàn", r => CreateRefundAsync(Owner, "deposit_id", J.Long(r!.Value, "id"), J.Dec(r.Value, "refundable"),
                     $"Hoàn cọc booking {J.Str(r.Value, "booking_code")}"), "REFUND_WRITE",
-                when: r => J.Dec(r, "refundable") > 0 && J.Str(r, "booking_status") is "DA_HUY" or "DA_TRA");
+                when: r => J.Dec(r, "refundable") > 0 && J.Str(r, "booking_status") is "DA_HUY" or "DA_TRA")
+            .AddDetails(r => $"Phiếu cọc booking {J.Str(r, "booking_code")}",
+                r => [("Mã phiếu đầy đủ", J.StrOrNull(r, "deposit_code")), ("Cổng thanh toán", J.StrOrNull(r, "gateway")),
+                    ("Mã giao dịch", J.StrOrNull(r, "reference"))]);
         return view;
     }
 

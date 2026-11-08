@@ -155,9 +155,14 @@ public sealed class DlgRoomType : DialogBase
     private readonly NumericUpDown price = Inputs.Number(800000, 0, 1_000_000_000, 0, 50000);
     private readonly TextBox description = Inputs.Text(null, true, 70);
     private readonly CheckBox active = new() { Text = "Đang kinh doanh", AutoSize = true, Checked = true };
+    // Chỉ dùng khi thêm mới: tạo kèm phòng và ảnh đại diện.
+    private readonly NumericUpDown roomCount = Inputs.Number(0, 0, 50);
+    private readonly TextBox firstNumber = Inputs.Text();
+    private readonly TextBox floor = Inputs.Text();
+    private readonly TextBox imageUrl = Inputs.Text();
 
     public DlgRoomType(ApiClient api, RoomTypeSummary? current)
-        : base(current is null ? "Thêm loại phòng" : $"Loại phòng {current.Name}", 600, 520,
+        : base(current is null ? "Thêm loại phòng" : $"Loại phòng {current.Name}", 600, current is null ? 660 : 520,
             current is null ? null : $"{current.RoomCount} phòng · {current.OccupiedCount} đang ở")
     {
         this.api = api;
@@ -168,9 +173,22 @@ public sealed class DlgRoomType : DialogBase
         grid.Add("Người lớn tối đa", adults);
         grid.Add("Trẻ em tối đa", children);
         grid.Add("Giá cơ bản / đêm (đ)", price);
-        if (current is not null) grid.Add("Diện tích (m²)", area);
+        grid.Add("Diện tích (m²)", area);
         grid.Add("Mô tả", description, 2);
         if (current is not null) grid.AddFull(active);
+        else
+        {
+            // Loại phòng chỉ hiện trên web khi có phòng thuộc loại đó → cho tạo phòng ngay tại đây.
+            grid.Add("Số phòng tạo kèm", roomCount);
+            grid.Add("Số phòng đầu tiên (vd 501)", firstNumber);
+            grid.Add("Tầng", floor);
+            grid.Add("Ảnh đại diện (URL https://…)", imageUrl);
+            grid.AddFull(new Label
+            {
+                Text = "Phòng tạo kèm có mã P + số phòng (P501, P502…), trạng thái Sẵn sàng. Loại phòng chỉ hiện trên web khi có ít nhất 1 phòng.",
+                AutoSize = true, MaximumSize = new Size(540, 0), Font = AppTheme.Small, ForeColor = AppTheme.TextMuted
+            });
+        }
 
         if (current is not null)
         {
@@ -194,8 +212,27 @@ public sealed class DlgRoomType : DialogBase
         if (current is null)
         {
             if (string.IsNullOrWhiteSpace(code.Text)) { Ui.Error(this, "Nhập mã loại (ví dụ VIP)."); return; }
-            ok = await RunAsync(() => api.CreateRoomTypeAsync(new CreateRoomTypeRequest(code.Text.Trim().ToUpperInvariant(), name.Text.Trim(),
-                (int)adults.Value, (int)children.Value, price.Value, string.IsNullOrWhiteSpace(description.Text) ? null : description.Text.Trim())));
+            var count = (int)roomCount.Value;
+            var start = 0;
+            if (count > 0 && !int.TryParse(firstNumber.Text.Trim(), out start)) { Ui.Error(this, "Nhập số phòng đầu tiên là số (ví dụ 501)."); return; }
+            var url = imageUrl.Text.Trim();
+            if (url.Length > 0 && !(Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme is "http" or "https"))
+            { Ui.Error(this, "Đường dẫn ảnh phải bắt đầu bằng http:// hoặc https://"); return; }
+            RoomTypeSummaryLite? created = null;
+            ok = await RunAsync(async () =>
+            {
+                created = await api.CreateRoomTypeAsync(new CreateRoomTypeRequest(code.Text.Trim().ToUpperInvariant(), name.Text.Trim(),
+                    (int)adults.Value, (int)children.Value, price.Value, string.IsNullOrWhiteSpace(description.Text) ? null : description.Text.Trim()));
+            });
+            if (!ok || created is null) return;
+            // API tạo loại phòng chưa nhận diện tích → cập nhật ngay sau khi tạo (lỗi ở bước này không chặn việc tạo).
+            try
+            {
+                await api.UpdateRoomTypeAsync(created.Id, new UpdateRoomTypeRequest(name.Text.Trim(), (int)adults.Value, (int)children.Value,
+                    area.Value, price.Value, description.Text, "HOAT_DONG"));
+            }
+            catch (ApiException) { }
+            await CreateExtrasAsync(created.Id, count, start, url);
         }
         else
         {
@@ -205,5 +242,36 @@ public sealed class DlgRoomType : DialogBase
                 (int)children.Value, area.Value, price.Value, description.Text, active.Checked ? "HOAT_DONG" : "NGUNG_SU_DUNG")));
         }
         if (ok) CloseOk();
+    }
+
+    /// <summary>Tạo các phòng kèm theo và ảnh đại diện cho loại phòng mới; lỗi từng phần được gom lại để báo một lần.</summary>
+    private async Task CreateExtrasAsync(long typeId, int count, int start, string url)
+    {
+        var errors = new List<string>();
+        var made = 0;
+        UseWaitCursor = true;
+        try
+        {
+            for (var i = 0; i < count; i++)
+            {
+                var number = (start + i).ToString();
+                try
+                {
+                    await api.CreateRoomAsync(new CreateRoomRequest("P" + number, number, typeId,
+                        string.IsNullOrWhiteSpace(floor.Text) ? null : floor.Text.Trim(), null, 0));
+                    made++;
+                }
+                catch (ApiException ex) { errors.Add($"Phòng {number}: {ex.Message}"); }
+            }
+            if (url.Length > 0)
+            {
+                try { await api.PostJsonAsync($"v1/room-types/{typeId}/images", new { url, alt_text = name.Text.Trim(), cover = true, order = 0 }); }
+                catch (ApiException ex) { errors.Add($"Ảnh: {ex.Message}"); }
+            }
+        }
+        finally { UseWaitCursor = false; }
+        var summary = $"Đã thêm loại phòng {name.Text.Trim()}" + (count > 0 ? $" và {made}/{count} phòng." : ". Chưa có phòng nào – thêm phòng ở tab Sơ đồ phòng để loại này hiện trên web.");
+        if (errors.Count > 0) Ui.Error(this, summary + "\n\nKhông tạo được:\n" + string.Join("\n", errors));
+        else Ui.Info(this, summary);
     }
 }

@@ -55,7 +55,8 @@ public sealed class ServicesPage : ModulePage
                 when: r => J.Str(r, "status") == "CHO_XU_LY")
             .AddAction("Hủy yêu cầu", r => TransitionAsync(r!.Value, "DA_HUY"), "SERVICE_WRITE",
                 when: r => J.Str(r, "status") == "CHO_XU_LY")
-            .AddAction("Tạo yêu cầu", _ => CreateRequestAsync(), "SERVICE_WRITE", needsRow: false);
+            .AddAction("Tạo yêu cầu", _ => CreateRequestAsync(), "SERVICE_WRITE", needsRow: false)
+            .AddDetails(r => $"Yêu cầu dịch vụ: {J.Str(r, "service_name")}");
         return view;
     }
 
@@ -141,8 +142,11 @@ public sealed class ServicesPage : ModulePage
                 Col.Status("Trạng thái", "trang_thai", 75))
             .AddAction("Ngừng / mở bán", r => ToggleServiceAsync(r!.Value), "SERVICE_CATALOG_WRITE")
             .AddAction("Sửa", r => EditServiceAsync(r!.Value), "SERVICE_CATALOG_WRITE")
-            .AddAction("Thêm dịch vụ", _ => EditServiceAsync(null), "SERVICE_CATALOG_WRITE", needsRow: false, primary: true);
-        if (Session.HasPermission("SERVICE_CATALOG_WRITE")) view.DefaultAction = r => EditServiceAsync(r!.Value);
+            .AddAction("Thêm dịch vụ", _ => EditServiceAsync(null), "SERVICE_CATALOG_WRITE", needsRow: false, primary: true)
+            .AddDetails(r => $"Dịch vụ {J.Str(r, "ten_dich_vu")}", configure: (r, dlg) =>
+            {
+                if (Session.HasPermission("SERVICE_CATALOG_WRITE")) dlg.Action("Sửa", () => EditServiceAsync(r), primary: true);
+            });
         return view;
     }
 
@@ -157,7 +161,10 @@ public sealed class ServicesPage : ModulePage
         dlg.Codes("status", "Trạng thái", FormDialog.S(row, "trang_thai") ?? "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
         dlg.TextField("description", "Mô tả", FormDialog.S(row, "mo_ta"), span: 2, multiline: true);
         dlg.OnSubmit = v => row is { } r ? Api.PutJsonAsync($"v1/services/{J.Long(r, "id")}", v) : Api.PostJsonAsync("v1/services", v);
-        return Task.FromResult(dlg.ShowFor(Owner));
+        var ok = dlg.ShowFor(Owner);
+        if (ok && row is null && dlg.Values.GetValueOrDefault("status") as string == "HOAT_DONG")
+            Ui.Info(Owner, "Đã thêm dịch vụ. Nhân viên lễ tân / phục vụ sẽ nhận thông báo \"Dịch vụ mới\" trên chuông.");
+        return Task.FromResult(ok);
     }
 
     private async Task<bool> ToggleServiceAsync(JsonElement row)

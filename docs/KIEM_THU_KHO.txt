@@ -68,7 +68,7 @@ D. TỒN KHO, LÔ, CẢNH BÁO, SỔ KHO
 --------------------------------------------------------------------------------
 D1  Tab Tồn kho theo lô: 4 lô (NS-A, NS-B, BL-OLD, BL-B) đúng số tồn ở trên.[ ]
 D2  Tích "sắp hết hạn (30 ngày)": thấy NS-A (còn 5 ngày) và BL-OLD (-3 ngày).[ ]
-D3  "Cảnh báo tồn thấp" kho chính: Khăn tắm 38/40, Giấy VS 30/60
+D3  Tab Mặt hàng > "Hàng dưới mức tối thiểu", chọn kho chính: Khăn tắm 38/40, Giấy VS 30/60
     (+ Cà phê, Bàn chải nếu chưa nhập PN03).                                [ ]
 D4  "Điều chỉnh tồn" Giấy VS loại DIEU_CHINH +40 -> tồn 70, hết cảnh báo.    [ ]
 D5  Điều chỉnh loại HONG_MAT với số dương -> phải báo lỗi.                  [ ]

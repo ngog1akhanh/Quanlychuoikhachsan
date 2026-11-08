@@ -143,21 +143,25 @@ public sealed class PricingPage : ModulePage
                 Col.Day("Đến ngày", "den_ngay", 70),
                 Col.Status("Trạng thái", "trang_thai", 75))
             .AddAction("Bật / tắt", r => ToggleStatusAsync(r!.Value, "deposit-policies"), "PRICING_WRITE")
-            .AddAction("Thêm chính sách", _ => AddDepositAsync(), "PRICING_WRITE", needsRow: false, primary: true);
+            .AddAction("Sửa", r => EditDepositAsync(r!.Value), "PRICING_WRITE")
+            .AddAction("Thêm chính sách", _ => EditDepositAsync(null), "PRICING_WRITE", needsRow: false, primary: true);
+        if (Session.HasPermission("PRICING_WRITE")) view.DefaultAction = r => EditDepositAsync(r!.Value);
         return view;
     }
 
-    private Task<bool> AddDepositAsync()
+    private Task<bool> EditDepositAsync(JsonElement? row)
     {
-        var dlg = new FormDialog("Thêm chính sách cọc", 560, "Áp dụng cho booking mới; không đổi số cọc của booking đã tạo.");
-        dlg.TextField("name", "Tên chính sách", null, required: true, span: 2);
-        dlg.Codes("type", "Cách tính", "PHAN_TRAM", "PHAN_TRAM", "DEM_DAU", "SO_TIEN_CO_DINH");
-        dlg.Number("value", "Giá trị (% hoặc số tiền)", 30, 0, 1_000_000_000, 2);
-        dlg.Date("from", "Áp dụng từ", null, nullable: true);
-        dlg.Date("to", "Đến ngày", null, nullable: true);
-        dlg.Codes("status", "Trạng thái", "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
+        var dlg = new FormDialog(row is null ? "Thêm chính sách cọc" : "Sửa chính sách cọc", 560, row is null
+            ? "Booking mới sẽ gắn chính sách cọc đang hoạt động, mới nhất và còn hiệu lực theo ngày nhận phòng."
+            : "Lưu ý: booking đã gắn chính sách này sẽ tính số cọc tối thiểu theo giá trị mới. Muốn giữ cho booking cũ thì tạo chính sách mới và tắt chính sách này.");
+        dlg.TextField("name", "Tên chính sách", FormDialog.S(row, "ten_chinh_sach"), required: true, span: 2);
+        dlg.Codes("type", "Cách tính", FormDialog.S(row, "kieu_tinh") ?? "PHAN_TRAM", "PHAN_TRAM", "DEM_DAU", "SO_TIEN_CO_DINH");
+        dlg.Number("value", "Giá trị (% hoặc số tiền)", FormDialog.D(row, "gia_tri", 30), 0, 1_000_000_000, 2);
+        dlg.Date("from", "Áp dụng từ", FormDialog.Day(row, "tu_ngay"), nullable: true);
+        dlg.Date("to", "Đến ngày", FormDialog.Day(row, "den_ngay"), nullable: true);
+        dlg.Codes("status", "Trạng thái", FormDialog.S(row, "trang_thai") ?? "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
         dlg.Validator = v => (string?)v["type"] == "PHAN_TRAM" && (decimal)v["value"]! > 100 ? "Phần trăm cọc tối đa 100." : null;
-        dlg.OnSubmit = v => Api.PostJsonAsync("v1/deposit-policies", v);
+        dlg.OnSubmit = v => row is { } r ? Api.PutJsonAsync($"v1/deposit-policies/{J.Long(r, "id")}", v) : Api.PostJsonAsync("v1/deposit-policies", v);
         return Task.FromResult(dlg.ShowFor(Owner));
     }
 
@@ -174,28 +178,41 @@ public sealed class PricingPage : ModulePage
                     $"≥{J.Int(r, "minimum_hours")}h: hoàn {J.Dec(r, "refund_percent"):0.##}%" + (J.Dec(r, "fixed_fee") > 0 ? $", phí {J.Money(J.Dec(r, "fixed_fee"))}" : ""))), 220),
                 Col.Status("Trạng thái", "status", 75))
             .AddAction("Bật / tắt", r => ToggleStatusAsync(r!.Value, "cancellation-policies", "status"), "PRICING_WRITE")
-            .AddAction("Thêm chính sách", _ => AddCancellationAsync(), "PRICING_WRITE", needsRow: false, primary: true);
+            .AddAction("Sửa", r => EditCancellationAsync(r!.Value), "PRICING_WRITE")
+            .AddAction("Thêm chính sách", _ => EditCancellationAsync(null), "PRICING_WRITE", needsRow: false, primary: true);
+        if (Session.HasPermission("PRICING_WRITE")) view.DefaultAction = r => EditCancellationAsync(r!.Value);
         return view;
     }
 
-    private Task<bool> AddCancellationAsync()
+    private Task<bool> EditCancellationAsync(JsonElement? row)
     {
-        var dlg = new FormDialog("Thêm chính sách hủy", 620, "Mỗi quy tắc: hủy trước ít nhất N giờ so với giờ nhận phòng thì hoàn X% tiền cọc, trừ phí cố định.");
-        dlg.TextField("name", "Tên chính sách", null, required: true, span: 2);
-        dlg.TextField("description", "Mô tả", null, span: 2, multiline: true);
+        var dlg = new FormDialog(row is null ? "Thêm chính sách hủy" : "Sửa chính sách hủy", 620,
+            "Mỗi quy tắc: hủy trước ít nhất N giờ so với giờ nhận phòng thì hoàn X% tiền cọc, trừ phí cố định."
+            + (row is null ? "" : " Booking đã gắn chính sách này sẽ hoàn theo quy tắc mới."));
+        dlg.TextField("name", "Tên chính sách", FormDialog.S(row, "name"), required: true, span: 2);
+        dlg.TextField("description", "Mô tả", FormDialog.S(row, "description"), span: 2, multiline: true);
         var rules = new LinesEditor(160, true,
             new LineCol("minimum_hours", "Hủy trước tối thiểu (giờ)", LineKind.Number, 90),
             new LineCol("refund_percent", "Hoàn (%)", LineKind.Number, 70),
             new LineCol("fixed_fee", "Phí cố định (đ)", LineKind.Number, 80));
-        rules.AddRow(new Dictionary<string, object?> { ["minimum_hours"] = 48m, ["refund_percent"] = 100m, ["fixed_fee"] = 0m });
-        rules.AddRow(new Dictionary<string, object?> { ["minimum_hours"] = 24m, ["refund_percent"] = 50m, ["fixed_fee"] = 0m });
-        rules.AddRow(new Dictionary<string, object?> { ["minimum_hours"] = 0m, ["refund_percent"] = 0m, ["fixed_fee"] = 0m });
+        if (row is { } existing)
+            foreach (var rule in J.Items(existing, "rules"))
+                rules.AddRow(new Dictionary<string, object?>
+                {
+                    ["minimum_hours"] = (decimal)J.Int(rule, "minimum_hours"), ["refund_percent"] = J.Dec(rule, "refund_percent"), ["fixed_fee"] = J.Dec(rule, "fixed_fee")
+                });
+        else
+        {
+            rules.AddRow(new Dictionary<string, object?> { ["minimum_hours"] = 48m, ["refund_percent"] = 100m, ["fixed_fee"] = 0m });
+            rules.AddRow(new Dictionary<string, object?> { ["minimum_hours"] = 24m, ["refund_percent"] = 50m, ["fixed_fee"] = 0m });
+            rules.AddRow(new Dictionary<string, object?> { ["minimum_hours"] = 0m, ["refund_percent"] = 0m, ["fixed_fee"] = 0m });
+        }
         dlg.Custom("rules", "Quy tắc hoàn tiền", rules, () => rules.Lines().Select(l => new
         {
             minimum_hours = (int)((decimal?)l["minimum_hours"] ?? 0), refund_percent = (decimal?)l["refund_percent"] ?? 0, fixed_fee = (decimal?)l["fixed_fee"] ?? 0
         }).ToList());
-        dlg.Codes("status", "Trạng thái", "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
-        dlg.OnSubmit = v => Api.PostJsonAsync("v1/cancellation-policies", v);
+        dlg.Codes("status", "Trạng thái", FormDialog.S(row, "status") ?? "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
+        dlg.OnSubmit = v => row is { } r ? Api.PutJsonAsync($"v1/cancellation-policies/{J.Long(r, "id")}", v) : Api.PostJsonAsync("v1/cancellation-policies", v);
         return Task.FromResult(dlg.ShowFor(Owner));
     }
 
@@ -212,28 +229,32 @@ public sealed class PricingPage : ModulePage
                 Col.Custom("Mức phụ thu", e => J.Str(e, "kieu_tinh") == "PHAN_TRAM" ? $"{J.Dec(e, "gia_tri"):0.##}% giá đêm" : J.MoneyVnd(J.Dec(e, "gia_tri")), 90),
                 Col.Status("Trạng thái", "trang_thai", 75))
             .AddAction("Bật / tắt", r => ToggleStatusAsync(r!.Value, "surcharge-policies"), "PRICING_WRITE")
-            .AddAction("Thêm mức phụ thu", _ => AddSurchargeAsync(), "PRICING_WRITE", needsRow: false, primary: true);
+            .AddAction("Sửa", r => EditSurchargeAsync(r!.Value), "PRICING_WRITE")
+            .AddAction("Thêm mức phụ thu", _ => EditSurchargeAsync(null), "PRICING_WRITE", needsRow: false, primary: true);
+        if (Session.HasPermission("PRICING_WRITE")) view.DefaultAction = r => EditSurchargeAsync(r!.Value);
         return view;
     }
 
-    private Task<bool> AddSurchargeAsync()
+    private Task<bool> EditSurchargeAsync(JsonElement? row)
     {
-        var dlg = new FormDialog("Thêm mức phụ thu", 560, "Số phút tính so với giờ nhận phòng 14:00 / trả phòng 12:00 chuẩn.");
-        dlg.Codes("type", "Loại", "NHAN_SOM", "NHAN_SOM", "TRA_TRE");
-        dlg.TextField("name", "Tên", null, required: true);
-        dlg.Number("from_minute", "Từ phút", 1, 0, 1440);
-        var to = dlg.Number("to_minute", "Đến phút (0 = không giới hạn)", 180, 0, 1440);
-        dlg.Codes("calculation", "Cách tính", "PHAN_TRAM", "PHAN_TRAM", "SO_TIEN_CO_DINH");
-        dlg.Number("value", "Giá trị (% hoặc số tiền)", 30, 0, 1_000_000_000, 2);
-        dlg.Codes("status", "Trạng thái", "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
+        var dlg = new FormDialog(row is null ? "Thêm mức phụ thu" : "Sửa mức phụ thu", 560, "Số phút tính so với giờ nhận phòng 14:00 / trả phòng 12:00 chuẩn.");
+        dlg.Codes("type", "Loại", FormDialog.S(row, "loai") ?? "NHAN_SOM", "NHAN_SOM", "TRA_TRE");
+        dlg.TextField("name", "Tên", FormDialog.S(row, "ten_chinh_sach"), required: true);
+        dlg.Number("from_minute", "Từ phút", FormDialog.D(row, "tu_phut", 1), 0, 1440);
+        dlg.Number("to_minute", "Đến phút (0 = không giới hạn)", row is null ? 180 : FormDialog.D(row, "den_phut", 0), 0, 1440);
+        dlg.Codes("calculation", "Cách tính", FormDialog.S(row, "kieu_tinh") ?? "PHAN_TRAM", "PHAN_TRAM", "SO_TIEN_CO_DINH");
+        dlg.Number("value", "Giá trị (% hoặc số tiền)", FormDialog.D(row, "gia_tri", 30), 0, 1_000_000_000, 2);
+        dlg.Codes("status", "Trạng thái", FormDialog.S(row, "trang_thai") ?? "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
+        dlg.Validator = v => (decimal)v["to_minute"]! != 0 && (decimal)v["to_minute"]! < (decimal)v["from_minute"]! ? "\"Đến phút\" phải lớn hơn \"Từ phút\" (hoặc để 0)." : null;
         dlg.OnSubmit = v =>
         {
             var toMinute = (decimal)v["to_minute"]!;
-            return Api.PostJsonAsync("v1/surcharge-policies", new
+            var body = new
             {
                 name = v["name"], type = v["type"], from_minute = (int)(decimal)v["from_minute"]!, to_minute = toMinute == 0 ? (int?)null : (int)toMinute,
                 calculation = v["calculation"], value = v["value"], status = v["status"]
-            });
+            };
+            return row is { } r ? Api.PutJsonAsync($"v1/surcharge-policies/{J.Long(r, "id")}", body) : Api.PostJsonAsync("v1/surcharge-policies", body);
         };
         return Task.FromResult(dlg.ShowFor(Owner));
     }
