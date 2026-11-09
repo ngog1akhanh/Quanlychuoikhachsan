@@ -1361,6 +1361,25 @@ FROM hoa_don_dich_vu hd
 LEFT JOIN (SELECT hoa_don_dich_vu_id,SUM(so_tien) tien_da_thanh_toan FROM thanh_toan_dich_vu WHERE trang_thai='THANH_CONG' GROUP BY hoa_don_dich_vu_id) t ON t.hoa_don_dich_vu_id=hd.id
 WHERE hd.trang_thai NOT IN ('NHAP','DA_HUY');
 
+CREATE TABLE IF NOT EXISTS noi_dung_web (
+  id BIGINT PRIMARY KEY AUTO_INCREMENT,
+  loai VARCHAR(20) NOT NULL,
+  tieu_de VARCHAR(200) NOT NULL,
+  noi_dung VARCHAR(2000) NOT NULL,
+  nhan VARCHAR(50) NULL,
+  thoi_gian_hien_thi VARCHAR(150) NULL,
+  ngay_su_kien DATE NULL,
+  hien_tu_ngay DATE NULL,
+  hien_den_ngay DATE NULL,
+  thu_tu INT NOT NULL DEFAULT 0,
+  trang_thai VARCHAR(20) NOT NULL DEFAULT 'HOAT_DONG',
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  CONSTRAINT ck_ndw_loai CHECK (loai IN ('CHINH_SACH','UU_DAI','SU_KIEN')),
+  CONSTRAINT ck_ndw_trang_thai CHECK (trang_thai IN ('HOAT_DONG','NGUNG_HOAT_DONG')),
+  INDEX idx_ndw_loai(loai, trang_thai, thu_tu)
+) ENGINE=InnoDB;
+
 -- SOURCE: seed_api_permissions.sql
 -- Chạy trên database hotel_management sau schema chính. Có thể chạy lại.
 -- Không tạo tài khoản hoặc mật khẩu mặc định. Gán tài khoản đầu tiên vào ADMIN bằng quy trình quản trị hiện có.
@@ -2591,6 +2610,59 @@ FROM hoa_don_phong WHERE trang_thai NOT IN ('NHAP', 'DA_HUY') GROUP BY YEAR(ngay
 -- DELETE FROM thanh_toan_hoa_don_phong WHERE ma_thanh_toan LIKE 'TT-HD-TK-%';
 -- DELETE FROM hoa_don_phong WHERE ma_hoa_don LIKE 'HD-TK-%';             -- cascade chi_tiet_hoa_don_phong
 -- DELETE FROM dat_phong WHERE ma_dat_phong LIKE 'TK-%';                  -- cascade chi_tiet_dat_phong
+
+-- Dữ liệu mẫu trang Thông tin & chính sách
+SET SQL_SAFE_UPDATES = 0;
+UPDATE khach_san
+SET ten_khach_san = 'Grand Saigon Hotel',
+    dia_chi = '123 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh',
+    so_dien_thoai = '1900 1234',
+    email = 'booking@grandsaigon.vn',
+    mo_ta = 'Nghỉ dưỡng đẳng cấp giữa lòng thành phố.'
+WHERE ten_khach_san = 'Khách sạn Demo';
+SET SQL_SAFE_UPDATES = 1;
+
+INSERT INTO noi_dung_web (loai, tieu_de, noi_dung, thu_tu)
+SELECT 'CHINH_SACH', 'Đổi ngày / đổi phòng',
+       'Khách chỉ được sửa thông tin liên hệ trên web. Việc đổi ngày hoặc đổi phòng cần gửi yêu cầu để nhân viên xử lý.', 10
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM noi_dung_web WHERE loai = 'CHINH_SACH' AND tieu_de = 'Đổi ngày / đổi phòng');
+
+INSERT INTO noi_dung_web (loai, tieu_de, noi_dung, thu_tu)
+SELECT 'CHINH_SACH', 'Giấy tờ khi nhận phòng',
+       'Khách xuất trình CCCD hoặc hộ chiếu còn hiệu lực khi nhận phòng để khai báo lưu trú theo quy định.', 20
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM noi_dung_web WHERE loai = 'CHINH_SACH' AND tieu_de = 'Giấy tờ khi nhận phòng');
+
+INSERT INTO noi_dung_web (loai, nhan, tieu_de, noi_dung, thoi_gian_hien_thi, thu_tu)
+SELECT 'UU_DAI', 'THÀNH VIÊN', 'Khách hàng thân thiết',
+       'Đăng ký tài khoản để theo dõi lịch sử đặt phòng và nhận thông báo ưu đãi cho lần đặt tiếp theo.',
+       'Dành cho tài khoản đã đăng ký', 10
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM noi_dung_web WHERE loai = 'UU_DAI' AND tieu_de = 'Khách hàng thân thiết');
+
+INSERT INTO noi_dung_web (loai, tieu_de, noi_dung, ngay_su_kien, thu_tu)
+SELECT 'SU_KIEN', 'Đêm Giáng sinh tại sảnh chính',
+       'Âm nhạc sống, tiệc nhẹ và không gian trang trí mùa lễ hội dành cho khách lưu trú.', '2026-12-24', 10
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM noi_dung_web WHERE loai = 'SU_KIEN' AND tieu_de = 'Đêm Giáng sinh tại sảnh chính');
+
+INSERT INTO noi_dung_web (loai, tieu_de, noi_dung, ngay_su_kien, thu_tu)
+SELECT 'SU_KIEN', 'Countdown chào năm mới',
+       'Cùng đón giao thừa trên sân thượng với tầm nhìn toàn cảnh thành phố.', '2026-12-31', 20
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM noi_dung_web WHERE loai = 'SU_KIEN' AND tieu_de = 'Countdown chào năm mới');
+
+-- Ưu đãi giữa tuần: giảm 10% Standard/Deluxe đêm T2–T5 trong 60 ngày
+INSERT INTO chinh_sach_gia (ma_chinh_sach, ten_chinh_sach, tu_ngay, den_ngay, muc_uu_tien, mo_ta, trang_thai)
+SELECT 'UD_GIUA_TUAN', 'Ưu đãi giữa tuần', UTC_DATE(), DATE_ADD(UTC_DATE(), INTERVAL 60 DAY), 10,
+       'Giảm 10% giá phòng các đêm thứ Hai đến thứ Năm.', 'HOAT_DONG'
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM chinh_sach_gia WHERE ma_chinh_sach = 'UD_GIUA_TUAN');
+
+INSERT IGNORE INTO chinh_sach_gia_thu (chinh_sach_gia_id, thu)
+SELECT c.id, t.thu FROM chinh_sach_gia c
+JOIN (SELECT 1 AS thu UNION ALL SELECT 2 UNION ALL SELECT 3 UNION ALL SELECT 4) t
+WHERE c.ma_chinh_sach = 'UD_GIUA_TUAN';
+
+INSERT INTO chi_tiet_chinh_sach_gia (chinh_sach_gia_id, loai_phong_id, kieu_dieu_chinh, gia_tri)
+SELECT c.id, l.id, 'GIAM_%', 10 FROM chinh_sach_gia c JOIN loai_phong l ON l.ma_loai_phong IN ('STD', 'DLX')
+WHERE c.ma_chinh_sach = 'UD_GIUA_TUAN'
+  AND NOT EXISTS (SELECT 1 FROM chi_tiet_chinh_sach_gia d WHERE d.chinh_sach_gia_id = c.id AND d.loai_phong_id = l.id);
 
 -- Database và dữ liệu demo đã sẵn sàng.
 SELECT DATABASE() AS database_name, 'READY_WITH_DEMO_DATA' AS installation_status;

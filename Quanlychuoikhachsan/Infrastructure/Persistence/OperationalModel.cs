@@ -33,5 +33,6 @@ public static class OperationalModel
         b.Entity<ThongBaoTaiKhoan>();
         b.Entity<CaiDatThongBao>();
         b.Entity<DanhGia>();
+        b.Entity<NoiDungWeb>();
     }
 }

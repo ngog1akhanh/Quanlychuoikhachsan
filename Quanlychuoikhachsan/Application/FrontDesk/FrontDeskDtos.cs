@@ -81,7 +81,12 @@ public sealed record FrontDeskBookingDetail(
     IReadOnlyList<DepositLine> Deposits,
     IReadOnlyList<InvoiceLine> Invoices,
     IReadOnlyList<CancellationLine> Cancellations,
-    IReadOnlyList<StatusHistoryLine> History);
+    IReadOnlyList<StatusHistoryLine> History,
+    // A1: số cọc tối thiểu theo chính sách cọc của booking (app điền sẵn số này).
+    decimal RequiredDeposit = 0,
+    // A1: API có nhận "Xác nhận cọc" lúc này không (HOLD còn hạn giữ chỗ) + lý do nếu không.
+    bool CanConfirmDeposit = false,
+    string? DepositBlockedReason = null);
 
 // ---------------- Tạo booking tại quầy ----------------
 public sealed record NewCustomerRequest(

@@ -74,7 +74,9 @@ public sealed class BookingDetailView : Panel
         };
         flow.Controls.Add(head);
 
-        if (d.HoldExpiresAt is { } hold && s.Status is "HOLD" or "CHO_COC")
+        if (s.Status is "HOLD" or "CHO_COC" && !d.CanConfirmDeposit && !string.IsNullOrWhiteSpace(d.DepositBlockedReason))
+            flow.Controls.Add(Banner(d.DepositBlockedReason!, AppTheme.WarningBg, AppTheme.WarningFg));
+        else if (d.HoldExpiresAt is { } hold && s.Status is "HOLD" or "CHO_COC")
             flow.Controls.Add(Banner($"Đang giữ chỗ chờ cọc đến {hold.ToLocalTime():dd/MM HH:mm}. Quá hạn, phòng có thể bị người khác đặt.", AppTheme.WarningBg, AppTheme.WarningFg));
         if (s.Status == "CHO_DUYET_HUY")
             flow.Controls.Add(Banner("Booking đang chờ quản lý duyệt yêu cầu hủy.", AppTheme.WarningBg, AppTheme.WarningFg));
@@ -223,7 +225,7 @@ public sealed class BookingDetailView : Panel
         switch (s.Status)
         {
             case "HOLD" or "CHO_COC":
-                if (canDeposit) Add("deposit", "Xác nhận cọc", Glyph.Money, true);
+                if (canDeposit && d.CanConfirmDeposit) Add("deposit", "Xác nhận cọc", Glyph.Money, true);
                 if (canWrite) Add("dates", "Đổi ngày", Glyph.Calendar);
                 if (canWrite) Add("room", "Đổi phòng", Glyph.Switch);
                 if (canWrite) Add("cancel", "Hủy", Glyph.Warning);

@@ -34,13 +34,20 @@
                 <div class="card card-body">
                     <div class="card-title">Thông tin lưu trú</div>
                     <dl class="kv">
-                        <dt>Mã booking</dt><dd>@_item.BookingCode</dd>
-                        <dt>Nhận phòng</dt><dd>@Fmt.Date(_item.CheckIn) · từ @HotelInfo.CheckInTime</dd>
-                        <dt>Trả phòng</dt><dd>@Fmt.Date(_item.CheckOut) · trước @HotelInfo.CheckOutTime</dd>
-                        <dt>Số đêm</dt><dd>@Math.Max(1, (_item.CheckOut.Date - _item.CheckIn.Date).Days)</dd>
-                        <dt>Tổng tiền phòng</dt><dd>@Fmt.Money(_item.Total)</dd>
-                        <dt>Tiền cọc (@((HotelInfo.DepositRate * 100).ToString("0"))%)</dt><dd>@Fmt.Money(Math.Round(_item.Total * HotelInfo.DepositRate, 0))</dd>
-                        <dt>Trạng thái</dt><dd>@BookingStatus.Label(_item.Status)</dd>
+                        <dt>Mã booking</dt>
+                        <dd>@_item.BookingCode</dd>
+                        <dt>Nhận phòng</dt>
+                        <dd>@Fmt.Date(_item.CheckIn) · từ @HotelInfo.CheckInTime</dd>
+                        <dt>Trả phòng</dt>
+                        <dd>@Fmt.Date(_item.CheckOut) · trước @HotelInfo.CheckOutTime</dd>
+                        <dt>Số đêm</dt>
+                        <dd>@Math.Max(1, (_item.CheckOut.Date - _item.CheckIn.Date).Days)</dd>
+                        <dt>Tổng tiền phòng</dt>
+                        <dd>@Fmt.Money(_item.Total)</dd>
+                        <dt>Tiền cọc (@DepositPercent)</dt>
+                        <dd>@Fmt.Money(DepositAmount)</dd>
+                        <dt>Trạng thái</dt>
+                        <dd>@BookingStatus.Label(_item.Status)</dd>
                     </dl>
                 </div>
 
@@ -96,6 +103,9 @@
 
     private BookingListItem? _item;
     private BookingResponse? _detail;
+    // Có giá chốt từ API thì dùng đúng số cọc theo chính sách; không thì tạm tính theo tỷ lệ chính sách.
+    private decimal DepositAmount => _detail is { RequiredDeposit: > 0 } d ? d.RequiredDeposit : Math.Round((_item?.Total ?? 0) * HotelInfo.DepositRate, 0);
+    private string DepositPercent => ((_item?.Total ?? 0) > 0 ? DepositAmount / _item!.Total * 100 : HotelInfo.DepositRate * 100).ToString("0.##") + "%";
     private bool _loading = true;
     private string? _error;
 

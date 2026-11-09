@@ -1,6 +1,7 @@
 @page "/rooms/{Id:long}"
 @implements IDisposable
 @inject RoomService RoomSvc
+@inject HotelInfoService InfoSvc
 @inject BookingState State
 @inject NavigationManager Nav
 
@@ -58,10 +59,26 @@
                         <tbody>
                             @for (var d = q.CheckIn; d < q.CheckOut; d = d.AddDays(1))
                             {
-                                <tr><td>@Fmt.Weekday(d)</td><td>@Fmt.Money(r.NightPrices?.FirstOrDefault(n => n.StayDate == d)?.FinalPrice ?? r.UnitPrice)</td></tr>
+                                var day = d;
+                                var normal = r.NightPrices?.FirstOrDefault(n => n.StayDate == day)?.FinalPrice ?? r.UnitPrice;
+                                var promo = _promoQuote?.Nights.FirstOrDefault(n => n.StayDate == day)?.FinalPrice;
+                                <tr>
+                                    <td>@Fmt.Weekday(d)</td>
+                                    <td>
+                                        @if (promo is { } p && p < normal)
+                                        {
+                                            <s class="muted">@Fmt.Money(normal)</s>
+                                            <b class="price-new">@Fmt.Money(p)</b>
+         }
+                                        else
+                                        {
+                                            @Fmt.Money(normal)
+                                        }
+                                    </td>
+                                </tr>
                             }
                         </tbody>
-                        <tfoot><tr><td>Tổng @q.Nights đêm</td><td>@Fmt.Money(r.UnitPrice * q.Nights)</td></tr></tfoot>
+                        <tfoot><tr><td>Tổng @q.Nights đêm</td><td>@Fmt.Money(_promoQuote?.Total ?? r.UnitPrice * q.Nights)</td></tr></tfoot>
                     </table>
                     <p class="muted small mb-0">Giá chính thức từng đêm (theo bảng giá, cuối tuần, ngày lễ) do hệ thống chốt khi giữ phòng.</p>
                 </div>
@@ -70,21 +87,86 @@
             <aside class="sticky-side">
                 <div class="card price-panel">
                     <div class="muted small">Giá mỗi đêm từ</div>
-                    <div class="big">@Fmt.Money(r.UnitPrice)</div>
+                    @if (HasPromo)
+                    {
+                        <div class="price-old"><s>@Fmt.Money(r.UnitPrice)</s></div>
+                        <div class="big">@Fmt.Money(PromoNightly)</div>
+                        <div class="promo-tag">Ưu đãi: @State.PromotionName</div>
+                    }
+                    else
+                    {
+                        <div class="big">@Fmt.Money(r.UnitPrice)</div>
+                    }
                     <hr />
                     <div class="summary-row"><span>Nhận phòng</span><b>@Fmt.Date(q.CheckIn)</b></div>
                     <div class="summary-row"><span>Trả phòng</span><b>@Fmt.Date(q.CheckOut)</b></div>
                     <div class="summary-row"><span>Khách</span><b>@q.Adults NL@(q.Children > 0 ? $", {q.Children} TE" : "")</b></div>
-                    <div class="summary-row total"><span>Tạm tính</span><span>@Fmt.Money(r.UnitPrice * q.Nights)</span></div>
-                    <div class="summary-row deposit"><span>Tiền cọc (@((HotelInfo.DepositRate * 100).ToString("0"))%)</span><b>@Fmt.Money(Math.Round(r.UnitPrice * q.Nights * HotelInfo.DepositRate, 0))</b></div>
 
-                    <button type="button" class="btn btn-primary btn-lg btn-block mt-2" @onclick="BookNow">Đặt phòng này</button>
-                    <button type="button" class="btn btn-outline btn-block mt-1" @onclick="ToggleSelect">
-                        @(State.IsSelected(r.Id) ? "Bỏ khỏi lựa chọn" : "Thêm vào lựa chọn (đặt nhiều phòng)")
-                    </button>
-                    @if (State.SelectedCount > 0)
+                    <div class="summary-row qty-row">
+                        <span>Số phòng</span>
+                        <div class="qty-stepper" role="group" aria-label="Số phòng">
+                            <button type="button" class="qty-btn" disabled="@(_qty <= 1 || _quoting)" @onclick="() => ChangeQtyAsync(-1)" aria-label="Bớt một phòng">−</button>
+                            <span class="qty-value">@_qty</span>
+                            <button type="button" class="qty-btn" disabled="@(_qty >= MaxQty || _quoting)" @onclick="() => ChangeQtyAsync(1)" aria-label="Thêm một phòng">+</button>
+                        </div>
+                    </div>
+                    <p class="muted small mb-0 text-right">Còn trống @MaxQty phòng loại này</p>
+
+                    @if (HasPromo)
                     {
-                        <p class="small muted mt-1 mb-0">Đang chọn @State.SelectedCount phòng · <a href="checkout">Tới trang đặt phòng</a></p>
+                        <div class="summary-row"><span class="muted">Giá gốc</span><s class="muted">@Fmt.Money(BaseTotal)</s></div>
+                    }
+                    <div class="summary-row total"><span>Tạm tính</span><span>@Fmt.Money(Total)</span></div>
+                    <div class="summary-row deposit"><span>Tiền cọc (@((HotelInfo.DepositRate * 100).ToString("0"))%)</span><b>@Fmt.Money(Math.Round(Total * HotelInfo.DepositRate, 0))</b></div>
+
+                    <button type="button" class="btn btn-primary btn-lg btn-block mt-2" disabled="@_quoting" @onclick="BookNow">
+                        Đặt @(_qty > 1 ? $"{_qty} phòng" : "phòng này")
+                    </button>
+
+                    <button type="button" class="btn btn-outline btn-block mt-1" @onclick="TogglePromotionsAsync">
+                        @(_showPromos ? "Ẩn ưu đãi" : HasPromo ? "Đổi ưu đãi" : "Áp dụng ưu đãi")
+                    </button>
+
+                    @if (_showPromos)
+                    {
+                        <div class="promo-list mt-1">
+                            @if (_promos is null)
+                            {
+                                <Loading Message="Đang tải ưu đãi..." />
+                            }
+                            else if (_promos.Count == 0)
+                            {
+                                <p class="muted small mb-0">Hiện không có ưu đãi nào áp dụng cho loại phòng và ngày bạn chọn.</p>
+                            }
+                            else
+                            {
+                                @foreach (var p in _promos)
+                                {
+                                    var promo = p;
+                                    var active = State.PromotionId == promo.Id;
+                                    <div class="promo-item @(active ? "active" : "")">
+                                        <div>
+                                            <b>@promo.Name</b>
+                                            <div class="small">@promo.Summary</div>
+                                            <div class="small muted">@promo.Period</div>
+                                        </div>
+                                        <button type="button" class="btn btn-sm @(active ? "btn-outline" : "btn-primary")"
+                                                disabled="@(active || _quoting)" @onclick="() => ApplyPromotionAsync(promo)">
+                                            @(active ? "Đang dùng" : "Áp dụng")
+                                        </button>
+                                    </div>
+                                }
+                                <p class="muted small mb-0">Mỗi lần đặt chỉ dùng được 1 ưu đãi.</p>
+                            }
+                            @if (State.PromotionId is not null)
+                            {
+                                <button type="button" class="btn btn-outline btn-block btn-sm mt-1" disabled="@_quoting" @onclick="RemovePromotion">Bỏ ưu đãi</button>
+                            }
+                        </div>
+                    }
+                    @if (!string.IsNullOrEmpty(_promoError))
+                    {
+                        <div class="alert alert-danger small mt-1">@_promoError</div>
                     }
                 </div>
             </aside>
@@ -110,6 +192,28 @@
     private bool _loading = true;
     private string? _error;
 
+    // Số phòng cùng loại + cùng kiểu giường (giống thẻ phòng ở trang danh sách)
+    private int _qty = 1;
+    private List<PublicRoom> Group => _room is null ? [] :
+        State.Results.Where(x => x.GroupKey == _room.GroupKey)
+            .OrderBy(x => x.Id == _room.Id ? 0 : 1).ThenBy(x => x.UnitPrice).ThenBy(x => x.Id).ToList();
+    private int MaxQty => Math.Max(1, Group.Count);
+    private List<PublicRoom> ChosenRooms => Group.Take(_qty).ToList();
+
+    // Ưu đãi
+    private bool _showPromos;
+    private bool _quoting;
+    private string? _promoError;
+    private IReadOnlyList<RoomPromotion>? _promos;
+    private RoomQuote? _promoQuote; // báo giá ưu đãi của phòng đang xem (bảng giá từng đêm)
+
+    private decimal BaseTotal => ChosenRooms.Sum(x => x.UnitPrice) * State.Query.Nights;
+    private bool HasPromo => State.PromotionId is not null && ChosenRooms.Count > 0 && ChosenRooms.All(x => State.PromoTotal(x.Id) is not null)
+                             && Total < BaseTotal;
+    private decimal Total => ChosenRooms.Sum(x => State.PromoTotal(x.Id) ?? x.UnitPrice * State.Query.Nights);
+    private decimal PromoNightly => _room is null || State.Query.Nights == 0 ? 0
+        : Math.Round((State.PromoTotal(_room.Id) ?? _room.UnitPrice * State.Query.Nights) / State.Query.Nights, 0);
+
     protected override void OnInitialized() => State.Changed += OnStateChanged;
 
     protected override async Task OnParametersSetAsync()
@@ -130,6 +234,13 @@
                 State.SetResults(q, rooms);
                 _room = rooms.FirstOrDefault(r => r.Id == Id);
             }
+            if (_room is not null)
+            {
+                _qty = Math.Clamp(Group.Count(x => State.IsSelected(x.Id)), 1, MaxQty);
+                _promos = null;
+                _showPromos = false;
+                if (State.PromotionId is { } promoId) await QuoteChosenAsync(promoId, State.PromotionName ?? "");
+            }
         }
         catch (ApiException ex)
         {
@@ -142,15 +253,61 @@
         }
     }
 
-    private void ToggleSelect()
+    private async Task ChangeQtyAsync(int delta)
     {
-        if (_room is not null) State.Toggle(_room);
+        _qty = Math.Clamp(_qty + delta, 1, MaxQty);
+        // Phòng mới thêm cũng cần giá ưu đãi do API báo
+        if (State.PromotionId is { } promoId) await QuoteChosenAsync(promoId, State.PromotionName ?? "");
+    }
+
+    private async Task TogglePromotionsAsync()
+    {
+        _showPromos = !_showPromos;
+        _promoError = null;
+        if (_showPromos && _promos is null && _room is not null)
+            _promos = await InfoSvc.GetRoomPromotionsAsync(_room.RoomTypeCode, State.Query.CheckIn, State.Query.CheckOut);
+    }
+
+    private Task ApplyPromotionAsync(RoomPromotion promo) => QuoteChosenAsync(promo.Id, promo.Name);
+
+    /// <summary>Hỏi API giá sau ưu đãi cho từng phòng đang chọn; chỉ 1 ưu đãi – áp dụng cái mới thì thay cái cũ.</summary>
+    private async Task QuoteChosenAsync(long promoId, string name)
+    {
+        if (_room is null) return;
+        _quoting = true;
+        _promoError = null;
+        try
+        {
+            var quotes = new List<RoomQuote>();
+            foreach (var room in ChosenRooms)
+                if (await RoomSvc.QuoteAsync(room.Id, State.Query, promoId) is { } quote) quotes.Add(quote);
+            if (quotes.Count == 0) { _promoError = "Chế độ dữ liệu mẫu không hỗ trợ ưu đãi."; return; }
+            State.SetPromotion(promoId, name, quotes);
+            _promoQuote = quotes.FirstOrDefault(x => x.RoomId == _room.Id);
+        }
+        catch (ApiException ex)
+        {
+            _promoError = ex.Message;
+            State.ClearPromotion();
+            _promoQuote = null;
+        }
+        finally
+        {
+            _quoting = false;
+        }
+    }
+
+    private void RemovePromotion()
+    {
+        State.ClearPromotion();
+        _promoQuote = null;
+        _promoError = null;
     }
 
     private void BookNow()
     {
         if (_room is null) return;
-        if (!State.IsSelected(_room.Id)) State.Toggle(_room);
+        State.SelectGroup(_room.GroupKey, ChosenRooms);
         Nav.NavigateTo("checkout");
     }
 

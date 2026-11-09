@@ -154,7 +154,8 @@ public sealed class WinFormsCompatibilityTests
         var finalDb = finalScope.ServiceProvider.GetRequiredService<HotelDbContext>();
         var refund = Assert.Single(await finalDb.Set<PhieuHoanTien>().ToListAsync());
         Assert.Equal(60, refund.SoTien);
-        Assert.Equal("CHO_XU_LY", refund.TrangThai);
+        Assert.Equal("THANH_CONG", refund.TrangThai); // hủy được duyệt => phiếu hoàn lưu ở trạng thái đã hoàn cọc
+        Assert.Equal(request.Id, refund.YeuCauHuyId);
         Assert.Empty(await finalDb.KhoaLichPhongs.ToListAsync());
     }
 

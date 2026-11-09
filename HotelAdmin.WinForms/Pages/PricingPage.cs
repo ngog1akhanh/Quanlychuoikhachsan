@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Text.Json;
 using HotelAdmin.Controls;
 using HotelAdmin.Forms.Dialogs;
@@ -24,6 +25,8 @@ public sealed class PricingPage : ModulePage
         AddTab("Chính sách cọc", Deposits());
         AddTab("Chính sách hủy", Cancellations());
         AddTab("Phụ thu sớm / trễ", Surcharges());
+        // Trang web khách "Thông tin & chính sách" đọc thông tin khách sạn + các chính sách trên + nội dung ở tab này.
+        if (session.HasPermission("HOTEL_WRITE")) AddTab("Nội dung web", WebContents());
         BuildTabs();
     }
 
@@ -99,7 +102,9 @@ public sealed class PricingPage : ModulePage
             foreach (var l in J.Items(r1, "chi_tiet"))
                 lines.AddRow(new Dictionary<string, object?>
                 {
-                    ["room_type_id"] = J.Long(l, "loai_phong_id"), ["adjustment_type"] = J.Str(l, "kieu_dieu_chinh"), ["value"] = J.Dec(l, "gia_tri")
+                    ["room_type_id"] = J.Long(l, "loai_phong_id"),
+                    ["adjustment_type"] = J.Str(l, "kieu_dieu_chinh"),
+                    ["value"] = J.Dec(l, "gia_tri")
                 });
         dlg.Custom("lines", "Điều chỉnh giá theo loại phòng (mỗi loại một dòng)", lines, () => lines.Lines());
         dlg.TextField("description", "Mô tả", FormDialog.S(row, "mo_ta"), span: 2, multiline: true);
@@ -122,8 +127,14 @@ public sealed class PricingPage : ModulePage
         if (!Ui.Confirm(Owner, $"{(next == "HOAT_DONG" ? "Bật" : "Tắt")} chính sách giá \"{J.Str(row, "ten_chinh_sach")}\"?")) return false;
         await Api.PutJsonAsync($"v1/pricing-policies/{J.Long(row, "id")}", new
         {
-            code = J.Str(row, "ma_chinh_sach"), name = J.Str(row, "ten_chinh_sach"), from = J.Str(row, "tu_ngay"), to = J.Str(row, "den_ngay"),
-            priority = J.Int(row, "muc_uu_tien"), weekdays = Days(row), description = J.StrOrNull(row, "mo_ta"), status = next,
+            code = J.Str(row, "ma_chinh_sach"),
+            name = J.Str(row, "ten_chinh_sach"),
+            from = J.Str(row, "tu_ngay"),
+            to = J.Str(row, "den_ngay"),
+            priority = J.Int(row, "muc_uu_tien"),
+            weekdays = Days(row),
+            description = J.StrOrNull(row, "mo_ta"),
+            status = next,
             lines = J.Items(row, "chi_tiet").Select(l => new { room_type_id = J.Long(l, "loai_phong_id"), adjustment_type = J.Str(l, "kieu_dieu_chinh"), value = J.Dec(l, "gia_tri") }).ToList()
         });
         return true;
@@ -199,7 +210,9 @@ public sealed class PricingPage : ModulePage
             foreach (var rule in J.Items(existing, "rules"))
                 rules.AddRow(new Dictionary<string, object?>
                 {
-                    ["minimum_hours"] = (decimal)J.Int(rule, "minimum_hours"), ["refund_percent"] = J.Dec(rule, "refund_percent"), ["fixed_fee"] = J.Dec(rule, "fixed_fee")
+                    ["minimum_hours"] = (decimal)J.Int(rule, "minimum_hours"),
+                    ["refund_percent"] = J.Dec(rule, "refund_percent"),
+                    ["fixed_fee"] = J.Dec(rule, "fixed_fee")
                 });
         else
         {
@@ -209,7 +222,9 @@ public sealed class PricingPage : ModulePage
         }
         dlg.Custom("rules", "Quy tắc hoàn tiền", rules, () => rules.Lines().Select(l => new
         {
-            minimum_hours = (int)((decimal?)l["minimum_hours"] ?? 0), refund_percent = (decimal?)l["refund_percent"] ?? 0, fixed_fee = (decimal?)l["fixed_fee"] ?? 0
+            minimum_hours = (int)((decimal?)l["minimum_hours"] ?? 0),
+            refund_percent = (decimal?)l["refund_percent"] ?? 0,
+            fixed_fee = (decimal?)l["fixed_fee"] ?? 0
         }).ToList());
         dlg.Codes("status", "Trạng thái", FormDialog.S(row, "status") ?? "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
         dlg.OnSubmit = v => row is { } r ? Api.PutJsonAsync($"v1/cancellation-policies/{J.Long(r, "id")}", v) : Api.PostJsonAsync("v1/cancellation-policies", v);
@@ -251,8 +266,13 @@ public sealed class PricingPage : ModulePage
             var toMinute = (decimal)v["to_minute"]!;
             var body = new
             {
-                name = v["name"], type = v["type"], from_minute = (int)(decimal)v["from_minute"]!, to_minute = toMinute == 0 ? (int?)null : (int)toMinute,
-                calculation = v["calculation"], value = v["value"], status = v["status"]
+                name = v["name"],
+                type = v["type"],
+                from_minute = (int)(decimal)v["from_minute"]!,
+                to_minute = toMinute == 0 ? (int?)null : (int)toMinute,
+                calculation = v["calculation"],
+                value = v["value"],
+                status = v["status"]
             };
             return row is { } r ? Api.PutJsonAsync($"v1/surcharge-policies/{J.Long(r, "id")}", body) : Api.PostJsonAsync("v1/surcharge-policies", body);
         };
@@ -260,6 +280,90 @@ public sealed class PricingPage : ModulePage
     }
 
     // =====================================================================
+    // =====================================================================
+    // Nội dung trang web "Thông tin & chính sách" (bảng noi_dung_web) + thông tin khách sạn
+    // =====================================================================
+    private DataView WebContents()
+    {
+        var view = new DataView(Session, "Nội dung trang Thông tin & chính sách (web khách)") { Loader = _ => Api.GetJsonAsync("v1/web-contents") };
+        view.Columns(
+                Col.Label("Loại", "type", 60),
+                Col.Text("Tiêu đề", "title", 130),
+                Col.Text("Nội dung", "body", 220),
+                Col.Custom("Hiển thị", e => J.Day(e, "event_date") is { } d ? "Ngày " + d.ToString("dd/MM/yyyy") : J.StrOrNull(e, "period_text") ?? "", 90),
+                Col.Text("Thứ tự", "order", 40),
+                Col.Status("Trạng thái", "status", 70))
+            .AddAction("Bật / tắt", r => ToggleStatusAsync(r!.Value, "web-contents", "status"), "HOTEL_WRITE")
+            .AddAction("Xóa", r => DeleteWebContentAsync(r!.Value), "HOTEL_WRITE")
+            .AddAction("Sửa", r => EditWebContentAsync(r!.Value), "HOTEL_WRITE")
+            .AddAction("Thông tin khách sạn", _ => EditHotelAsync(), "HOTEL_WRITE", needsRow: false)
+            .AddAction("Thêm nội dung", _ => EditWebContentAsync(null), "HOTEL_WRITE", needsRow: false, primary: true);
+        view.DefaultAction = r => EditWebContentAsync(r!.Value);
+        return view;
+    }
+
+    private Task<bool> EditWebContentAsync(JsonElement? row)
+    {
+        var dlg = new FormDialog(row is null ? "Thêm nội dung web" : "Sửa nội dung web", 620,
+            "Chính sách cọc / hủy / phụ thu và ưu đãi giảm giá được web lấy tự động từ các tab bên cạnh. Ở đây chỉ nhập chính sách bổ sung, ưu đãi dạng thông báo và sự kiện.");
+        dlg.Codes("type", "Loại", FormDialog.S(row, "type") ?? "UU_DAI", "CHINH_SACH", "UU_DAI", "SU_KIEN");
+        dlg.TextField("tag", "Nhãn trên thẻ (vd ƯU ĐÃI, THÀNH VIÊN)", FormDialog.S(row, "tag"));
+        dlg.TextField("title", "Tiêu đề", FormDialog.S(row, "title"), required: true, span: 2);
+        dlg.TextField("body", "Nội dung", FormDialog.S(row, "body"), required: true, span: 2, multiline: true);
+        dlg.TextField("period_text", "Dòng thời gian (vd Áp dụng quanh năm)", FormDialog.S(row, "period_text"));
+        dlg.Date("event_date", "Ngày sự kiện (tự ẩn sau ngày này)", FormDialog.Day(row, "event_date"), nullable: true);
+        dlg.Date("show_from", "Hiện từ ngày", FormDialog.Day(row, "show_from"), nullable: true);
+        dlg.Date("show_to", "Ẩn sau ngày", FormDialog.Day(row, "show_to"), nullable: true);
+        dlg.Number("order", "Thứ tự hiển thị", FormDialog.D(row, "order", 0), 0, 1000);
+        dlg.Codes("status", "Trạng thái", FormDialog.S(row, "status") ?? "HOAT_DONG", "HOAT_DONG", "NGUNG_HOAT_DONG");
+        dlg.Validator = v => v["show_from"] is string showFrom && v["show_to"] is string showTo && string.CompareOrdinal(showTo, showFrom) < 0
+            ? "Ngày ẩn phải sau ngày bắt đầu hiển thị." : null;
+        dlg.OnSubmit = v =>
+        {
+            v["order"] = Convert.ToInt32(v["order"]);
+            return row is { } r ? Api.PutJsonAsync($"v1/web-contents/{J.Long(r, "id")}", v) : Api.PostJsonAsync("v1/web-contents", v);
+        };
+        return Task.FromResult(dlg.ShowFor(Owner));
+    }
+
+    private async Task<bool> DeleteWebContentAsync(JsonElement row)
+    {
+        if (!Ui.Confirm(Owner, $"Xóa nội dung \"{J.Str(row, "title")}\"? Muốn ẩn tạm thời thì dùng Bật / tắt.")) return false;
+        await Api.SendRawAsync(HttpMethod.Delete, $"v1/web-contents/{J.Long(row, "id")}", null);
+        return true;
+    }
+
+    /// <summary>Sửa bản ghi khach_san đầu tiên (tên, địa chỉ, liên hệ, giờ nhận/trả) – hiện ở web và trang Thông tin.</summary>
+    private async Task<bool> EditHotelAsync()
+    {
+        var hotels = await Api.GetJsonAsync("v1/hotels");
+        JsonElement? hotel = J.Items(hotels).Cast<JsonElement?>().FirstOrDefault();
+        static DateTime? At(JsonElement? e, string path) =>
+            TimeOnly.TryParse(FormDialog.S(e, path), CultureInfo.InvariantCulture, out var t) ? DateTime.Today.Add(t.ToTimeSpan()) : null;
+        var dlg = new FormDialog("Thông tin khách sạn", 620, "Hiển thị trên trang Thông tin & chính sách của web khách.");
+        dlg.TextField("name", "Tên khách sạn", FormDialog.S(hotel, "ten_khach_san"), required: true, span: 2);
+        dlg.TextField("address", "Địa chỉ", FormDialog.S(hotel, "dia_chi"), required: true, span: 2);
+        dlg.TextField("phone", "Điện thoại", FormDialog.S(hotel, "so_dien_thoai"));
+        dlg.TextField("email", "Email", FormDialog.S(hotel, "email"));
+        dlg.TextField("website", "Website (https://…)", FormDialog.S(hotel, "website"), span: 2);
+        var checkIn = dlg.DateTimeField("_in", "Giờ nhận phòng", At(hotel, "gio_nhan_phong") ?? DateTime.Today.AddHours(14));
+        var checkOut = dlg.DateTimeField("_out", "Giờ trả phòng", At(hotel, "gio_tra_phong") ?? DateTime.Today.AddHours(12));
+        checkIn.CustomFormat = checkOut.CustomFormat = "HH:mm";
+        checkIn.ShowUpDown = checkOut.ShowUpDown = true;
+        dlg.TextField("description", "Giới thiệu ngắn", FormDialog.S(hotel, "mo_ta"), span: 2, multiline: true);
+        dlg.OnSubmit = v =>
+        {
+            v.Remove("_in"); v.Remove("_out");
+            v["check_in_time"] = checkIn.Value.ToString("HH:mm:00", CultureInfo.InvariantCulture);
+            v["check_out_time"] = checkOut.Value.ToString("HH:mm:00", CultureInfo.InvariantCulture);
+            foreach (var key in new[] { "phone", "email", "website", "description" })
+                if (v[key] is string text && string.IsNullOrWhiteSpace(text)) v[key] = null;
+            return hotel is { } h ? Api.PutJsonAsync($"v1/hotels/{J.Long(h, "id")}", v) : Api.PostJsonAsync("v1/hotels", v);
+        };
+        dlg.ShowFor(Owner);
+        return false; // danh sách nội dung không đổi
+    }
+
     private async Task<bool> ToggleStatusAsync(JsonElement row, string resource, string statusPath = "trang_thai")
     {
         var next = J.Str(row, statusPath) == "HOAT_DONG" ? "NGUNG_HOAT_DONG" : "HOAT_DONG";

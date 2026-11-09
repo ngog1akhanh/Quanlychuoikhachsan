@@ -1,22 +1,23 @@
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text;
 using System.Threading.RateLimiting;
-using Microsoft.AspNetCore.RateLimiting;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Metadata;
-using Microsoft.OpenApi;
-using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 using Quanlychuoikhachsan.Api.Contracts;
-using Quanlychuoikhachsan.Infrastructure.Authentication;
+using Quanlychuoikhachsan.Application.Rooms;
+using Quanlychuoikhachsan.Domain.Entities;
 using Quanlychuoikhachsan.Infrastructure.Auditing;
+using Quanlychuoikhachsan.Infrastructure.Authentication;
 using Quanlychuoikhachsan.Infrastructure.Middleware;
 using Quanlychuoikhachsan.Infrastructure.Persistence;
-using Quanlychuoikhachsan.Domain.Entities;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -31,6 +32,8 @@ builder.Services.AddScoped<Quanlychuoikhachsan.Application.Bookings.BookingServi
 // Adapter WinForms dùng chung nghiệp vụ với REST API mới.
 builder.Services.AddScoped<Quanlychuoikhachsan.Application.FrontDesk.IFrontDeskService, Quanlychuoikhachsan.Application.FrontDesk.FrontDeskService>();
 builder.Services.AddScoped<Quanlychuoikhachsan.Application.Rooms.IRoomAdminService, Quanlychuoikhachsan.Application.Rooms.RoomAdminService>();
+builder.Services.Configure<RoomPhotoOptions>(builder.Configuration.GetSection(RoomPhotoOptions.SectionName));
+builder.Services.AddSingleton<RoomPhotoStorage>();
 builder.Services.AddScoped<Quanlychuoikhachsan.Application.Bookings.BookingMaintenance>();
 builder.Services.AddHostedService<Quanlychuoikhachsan.Application.Bookings.BookingMaintenanceWorker>();
 builder.Services.AddScoped<Quanlychuoikhachsan.Application.Services.ServiceOperations>();

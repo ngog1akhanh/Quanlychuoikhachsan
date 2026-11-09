@@ -1,15 +1,20 @@
 using System.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
 using MySqlConnector;
 using Quanlychuoikhachsan.Application.Common;
+using Quanlychuoikhachsan.Application.Payments;
 using Quanlychuoikhachsan.Domain.Entities;
 using Quanlychuoikhachsan.Infrastructure.Persistence;
 
 namespace Quanlychuoikhachsan.Application.Bookings;
 
-public sealed partial class BookingService(HotelDbContext dbContext, CurrentActor actor, NotificationWriter notifications) : IBookingService
+public sealed partial class BookingService(HotelDbContext dbContext, CurrentActor actor, NotificationWriter notifications,
+    IOptions<VietQrSettings>? vietQrOptions = null) : IBookingService
 {
-    private static readonly TimeSpan HoldDuration = TimeSpan.FromMinutes(15);
+    /// <summary>Số phút giữ phòng chờ cọc (trang Thông tin &amp; chính sách đọc giá trị này qua API).</summary>
+    public const int HoldMinutes = 15;
+    private static readonly TimeSpan HoldDuration = TimeSpan.FromMinutes(HoldMinutes);
     public async Task<IReadOnlyList<RoomSummaryResponse>> FindAvailableRoomsAsync(RoomAvailabilityQuery query, CancellationToken cancellationToken)
     {
         ValidateDates(query.CheckInDate, query.CheckOutDate);
@@ -106,7 +111,8 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
             return await InvoiceResponseAsync(invoice, ct);
         }
         if (invoice.TrangThai is not ("DA_PHAT_HANH" or "TT_MOT_PHAN")) throw new InvalidArgumentException("Only issued, unpaid invoices accept payments.");
-        if (request.ShiftId.HasValue && !await dbContext.CaLamViecs.AnyAsync(x => x.Id == request.ShiftId && x.NhanVienId == employee && x.TrangThai == "DANG_MO", ct)) throw new InvalidArgumentException("Shift must belong to the cashier and be open.");
+        // Không gửi ca thì tự gắn ca đang mở của thu ngân → khoản thu vào đối soát ca.
+        var shiftId = await CashierShift.ResolveAsync(dbContext, request.ShiftId, employee, ct);
         if (await dbContext.YeuCauThanhToanVietQrs.AnyAsync(
             x => x.HoaDonPhongId == invoiceId && x.TrangThai != "PAID" && x.TrangThai != "REFUNDED", ct))
             throw new InvalidArgumentException("Resolve the existing VietQR order before recording a manual invoice payment; changing its local status does not invalidate its QR code.");
@@ -120,7 +126,7 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
         var paid = await dbContext.ThanhToanHoaDonPhongs.Where(x => x.HoaDonPhongId == invoiceId && x.TrangThai == "THANH_CONG").SumAsync(x => (decimal?)x.SoTien, ct) ?? 0;
         var deposit = await dbContext.ApDungCocHoaDons.Where(x => x.HoaDonPhongId == invoiceId).SumAsync(x => (decimal?)x.SoTienApDung, ct) ?? 0;
         if (paid + deposit + request.Amount > invoice.TongTien) throw new InvalidArgumentException("Payment exceeds the remaining invoice balance.");
-        dbContext.ThanhToanHoaDonPhongs.Add(new ThanhToanHoaDonPhong { MaThanhToan = $"TT{Guid.NewGuid():N}", HoaDonPhongId = invoiceId, NhanVienThuId = employee, CaLamViecId = request.ShiftId, PhuongThucId = request.PaymentMethodId, SoTien = request.Amount, ThoiGianThanhToan = DateTime.UtcNow, CongThanhToan = request.PaymentGateway, MaGiaoDich = request.TransactionId });
+        dbContext.ThanhToanHoaDonPhongs.Add(new ThanhToanHoaDonPhong { MaThanhToan = $"TT{Guid.NewGuid():N}", HoaDonPhongId = invoiceId, NhanVienThuId = employee, CaLamViecId = shiftId, PhuongThucId = request.PaymentMethodId, SoTien = request.Amount, ThoiGianThanhToan = DateTime.UtcNow, CongThanhToan = request.PaymentGateway, MaGiaoDich = request.TransactionId });
         invoice.TrangThai = paid + deposit + request.Amount >= invoice.TongTien ? "DA_THANH_TOAN" : "TT_MOT_PHAN";
         await dbContext.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return await InvoiceResponseAsync(invoice, ct);
@@ -152,17 +158,36 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
         foreach (var d in booking.ChiTietDatPhongs) d.TrangThai = "DA_HUY";
         item.TrangThai = "DA_DUYET"; item.SoTienHoanDuyet = request.ApprovedRefund; item.NhanVienXuLyId = await actor.EmployeeIdAsync(ct); item.ThoiGianXuLy = DateTime.UtcNow; item.GhiChuXuLy = request.Note;
         var remainingRefund = request.ApprovedRefund;
+        var refundedAt = DateTime.UtcNow;
+        var totalRefunded = 0m;
         foreach (var deposit in await dbContext.PhieuCocs.Where(x => x.DatPhongId == booking.Id && x.TrangThai == "DA_THANH_TOAN").OrderBy(x => x.Id).ToListAsync(ct))
         {
             var reserved = await dbContext.Set<PhieuHoanTien>().Where(x => x.PhieuCocId == deposit.Id && x.TrangThai != "DA_HUY").SumAsync(x => (decimal?)x.SoTien, ct) ?? 0;
             var amount = Math.Min(remainingRefund, Math.Max(0, deposit.SoTien - reserved));
-            if (amount > 0) dbContext.Add(new PhieuHoanTien { MaPhieuHoan = $"HT{Guid.NewGuid():N}", PhieuCocId = deposit.Id, YeuCauHuyId = item.Id, NhanVienId = item.NhanVienXuLyId, PhuongThucId = deposit.PhuongThucId, SoTien = amount, LyDo = request.Note ?? "Approved booking cancellation", TrangThai = "CHO_XU_LY", ThoiGianHoan = DateTime.UtcNow });
+            if (amount > 0)
+            {
+                // Hủy phòng được duyệt = tiền cọc đã được hoàn cho khách: lưu luôn phiếu ở trạng thái THANH_CONG (hiển thị "Đã hoàn cọc")
+                // để có lịch sử hoàn tiền, đối soát ca thu ngân đúng và không còn phiếu CHO_XU_LY chiếm hết số tiền có thể hoàn.
+                dbContext.Add(new PhieuHoanTien { MaPhieuHoan = $"HT{Guid.NewGuid():N}", PhieuCocId = deposit.Id, YeuCauHuyId = item.Id, NhanVienId = item.NhanVienXuLyId, PhuongThucId = deposit.PhuongThucId, SoTien = amount, LyDo = request.Note ?? "Hoàn cọc do hủy đặt phòng", TrangThai = "THANH_CONG", ThoiGianHoan = refundedAt });
+                totalRefunded += amount;
+                var succeeded = await dbContext.Set<PhieuHoanTien>().Where(x => x.PhieuCocId == deposit.Id && x.TrangThai == "THANH_CONG").SumAsync(x => (decimal?)x.SoTien, ct) ?? 0;
+                if (succeeded + amount >= deposit.SoTien)
+                {
+                    var order = await dbContext.Set<DepositPaymentOrder>().SingleOrDefaultAsync(p => p.BookingId == deposit.DatPhongId && p.TransactionId == deposit.MaGiaoDich, ct);
+                    if (order is not null) order.Status = "REFUNDED";
+                }
+            }
             remainingRefund -= amount;
         }
         if (remainingRefund > 0) throw new InvalidArgumentException("Refund exceeds available deposits.");
         dbContext.KhoaLichPhongs.RemoveRange(await dbContext.KhoaLichPhongs.Where(x => x.ChiTietDatPhongId != 0 && dbContext.ChiTietDatPhongs.Where(d => d.DatPhongId == item.DatPhongId).Select(d => d.Id).Contains(x.ChiTietDatPhongId)).ToListAsync(ct));
-            await dbContext.SaveChangesAsync(ct);
+        await dbContext.SaveChangesAsync(ct);
         await notifications.BookingAsync(booking, actor.AccountId, "CHO_DUYET_HUY", request.Note ?? "Đã duyệt hủy đặt phòng.", ct);
+        if (totalRefunded > 0)
+        {
+            var customerAccountId = await dbContext.KhachHangs.Where(k => k.Id == booking.KhachHangId).Select(k => k.TaiKhoanId).SingleOrDefaultAsync(ct);
+            if (customerAccountId.HasValue) await notifications.SendAsync("PAYMENT", "Đã hoàn tiền cọc", $"Booking {booking.MaDatPhong}: đã hoàn cọc {totalRefunded:N0} VND.", [customerAccountId.Value], actor.AccountId, booking, ct);
+        }
         await dbContext.SaveChangesAsync(ct); await tx.CommitAsync(ct); return new(item.Id, $"cancellation-requests/{item.Id}", item.DatPhongId, item.TrangThai, item.SoTienHoanDuKien, item.SoTienHoanDuyet);
     }
 
@@ -221,13 +246,17 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
     }
     private static InvoiceResponse ToInvoiceResponse(HoaDonPhong invoice, long bookingId) => new(invoice.Id, $"invoices/{invoice.Id}", bookingId, invoice.TienPhong, invoice.TienPhuThu, invoice.TienBoiThuong, invoice.TienThue, invoice.TongTien, 0, 0, invoice.TongTien, invoice.TrangThai);
 
-    public async Task<PricePreviewResponse> PreviewPriceAsync(long roomId, DateOnly checkIn, DateOnly checkOut, CancellationToken cancellationToken)
+    public Task<PricePreviewResponse> PreviewPriceAsync(long roomId, DateOnly checkIn, DateOnly checkOut, CancellationToken cancellationToken)
+        => PreviewPriceAsync(roomId, checkIn, checkOut, null, cancellationToken);
+
+    public async Task<PricePreviewResponse> PreviewPriceAsync(long roomId, DateOnly checkIn, DateOnly checkOut, long? promotionId, CancellationToken cancellationToken)
     {
         ValidateDates(checkIn, checkOut);
         var room = await dbContext.Phongs.AsNoTracking().Include(x => x.LoaiPhong)
             .SingleOrDefaultAsync(x => x.Id == roomId, cancellationToken)
             ?? throw new ResourceNotFoundException($"Room rooms/{roomId} was not found.");
-        var prices = await CalculateNightsAsync(room, checkIn, checkOut, cancellationToken);
+        if (promotionId.HasValue) await ValidatePromotionAsync(promotionId.Value, [room.LoaiPhongId], checkIn, checkOut, cancellationToken);
+        var prices = await CalculateNightsAsync(room, checkIn, checkOut, cancellationToken, promotionId);
         return new PricePreviewResponse(roomId, checkIn, checkOut, prices, prices.Sum(x => x.FinalPrice));
     }
     public async Task<BookingResponse> CreateBookingAsync(long accountId, CreateBookingRequest request, CancellationToken cancellationToken)
@@ -262,6 +291,8 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
             throw new AlreadyExistsException("One or more selected rooms are not available.");
         if (rooms.Sum(x => x.LoaiPhong.SoNguoiLonToiDa) < request.Adults || rooms.Sum(x => x.LoaiPhong.SoTreEmToiDa) < request.Children)
             throw new InvalidArgumentException("Selected rooms cannot accommodate all guests.");
+        if (request.PromotionId.HasValue)
+            await ValidatePromotionAsync(request.PromotionId.Value, rooms.Select(x => x.LoaiPhongId).Distinct().ToList(), checkIn, checkOut, cancellationToken);
 
         var now = DateTime.UtcNow;
         var holdExpiresAt = now.Add(HoldDuration);
@@ -300,7 +331,7 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
             var adultsLeft = request.Adults; var childrenLeft = request.Children;
             foreach (var room in rooms)
             {
-                var prices = await CalculateNightsAsync(room, checkIn, checkOut, cancellationToken);
+                var prices = await CalculateNightsAsync(room, checkIn, checkOut, cancellationToken, request.PromotionId);
                 var detail = new ChiTietDatPhong
                 {
                     DatPhongId = booking.Id,
@@ -344,7 +375,8 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
             await dbContext.SaveChangesAsync(cancellationToken);
             await notifications.BookingAsync(booking, accountId, "", "Đặt phòng mới đang chờ cọc.", cancellationToken);
             await transaction.CommitAsync(cancellationToken);
-            return ToResponse(booking, details.SelectMany(x => x.Prices).ToArray(), holdExpiresAt);
+            var requiredDeposit = await RequiredDepositAsync(booking, cancellationToken);
+            return ToResponse(booking, details.SelectMany(x => x.Prices).ToArray(), holdExpiresAt, requiredDeposit);
         }
         catch (DbUpdateException exception) when (IsDuplicateKey(exception))
         {
@@ -361,43 +393,51 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
     {
         Input.Money(request.Amount, "amount"); Input.Text(request.TransactionId, 150, "transaction_id");
         if (request.Amount <= 0 || string.IsNullOrWhiteSpace(request.PaymentGateway) || string.IsNullOrWhiteSpace(request.TransactionId))
-            throw new InvalidArgumentException("A positive amount, payment_gateway and transaction_id are required.");
+            throw new InvalidArgumentException("Số tiền cọc phải lớn hơn 0 và cần có phương thức, mã giao dịch.");
         if (string.Equals(request.PaymentGateway.Trim(), "VietQR", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidArgumentException("VietQR deposits can only be confirmed after a verified inquiry.");
+            throw new InvalidArgumentException("Cọc VietQR chỉ được ghi nhận sau khi đối soát với ngân hàng; tại quầy hãy chọn Tiền mặt / Chuyển khoản / Thẻ.");
 
         await using var transaction = await BookingTransaction.BeginAsync(dbContext, cancellationToken);
         await LockBookingAsync(bookingId, cancellationToken);
         var booking = await dbContext.DatPhongs.Include(x => x.ChiTietDatPhongs)
             .SingleOrDefaultAsync(x => x.Id == bookingId, cancellationToken)
-            ?? throw new ResourceNotFoundException($"Booking bookings/{bookingId} was not found.");
+            ?? throw new ResourceNotFoundException($"Không tìm thấy booking #{bookingId}.");
 
         var existingPayment = await dbContext.PhieuCocs.SingleOrDefaultAsync(x =>
             x.CongThanhToan == request.PaymentGateway && x.MaGiaoDich == request.TransactionId, cancellationToken);
         if (existingPayment is not null)
         {
             if (existingPayment.DatPhongId != bookingId || existingPayment.SoTien != request.Amount || existingPayment.PhuongThucId != request.PaymentMethodId)
-                throw new AlreadyExistsException("The payment transaction was already used with different data.");
+                throw new AlreadyExistsException("Mã giao dịch này đã được dùng cho một phiếu cọc khác.");
             return await LoadBookingResponseAsync(bookingId, cancellationToken);
         }
 
         if (booking.TrangThai is not ("HOLD" or "BOOKED"))
-            throw new InvalidArgumentException($"Booking is in state {booking.TrangThai} and cannot be confirmed.");
+            throw new InvalidArgumentException($"Booking đang ở trạng thái {booking.TrangThai}, không thể xác nhận cọc (chỉ booking đang giữ chỗ hoặc đã đặt).");
         var previousStatus = booking.TrangThai;
-        if (await dbContext.Set<DepositPaymentOrder>().AnyAsync(x => x.BookingId == bookingId && x.Status == "PENDING", cancellationToken)) throw new InvalidArgumentException("Reconcile the existing deposit QR before recording a manual deposit.");
+        // Khách đã tạo QR cọc (đơn VietQR PENDING).
+        // - Chế độ demo: ngân hàng không bao giờ báo về, nên nhân viên xác nhận cọc = coi như đã nhận tiền;
+        //   đơn QR được đóng (PAID) ngay bên dưới để trang web của khách tự chuyển sang "Hoàn tất".
+        // - VietQR thật: chặn để tránh thu cọc 2 lần (khách có thể đã chuyển khoản qua QR).
+        var pendingQr = await dbContext.Set<DepositPaymentOrder>().SingleOrDefaultAsync(x => x.BookingId == bookingId && x.Status == "PENDING", cancellationToken);
+        if (pendingQr is not null && !IsVietQrDemo)
+            throw new InvalidArgumentException("Khách đang có mã QR cọc chờ thanh toán. Hãy bấm \"Kiểm tra\" đối soát VietQR trước khi ghi nhận cọc thủ công.");
         var now = DateTime.UtcNow;
         var locks = await dbContext.KhoaLichPhongs.Where(x => x.ChiTietDatPhongId != 0 && booking.ChiTietDatPhongs.Select(d => d.Id).Contains(x.ChiTietDatPhongId)).ToListAsync(cancellationToken);
         if (previousStatus == "HOLD" && (locks.Count == 0 || locks.Any(x => x.TrangThai != "HOLD" || x.HetHanGiuCho <= now)))
-            throw new AlreadyExistsException("The booking hold has expired or is no longer available.");
+            throw new AlreadyExistsException("Booking đã hết hạn giữ chỗ (quá thời gian chờ cọc), phòng có thể đã được nhả. Hãy hủy và tạo booking mới.");
         var received = await dbContext.PhieuCocs.Where(x => x.DatPhongId == bookingId && x.TrangThai == "DA_THANH_TOAN").SumAsync(x => (decimal?)x.SoTien, cancellationToken) ?? 0;
         if (request.Amount + received > booking.TongTienDuKien)
-            throw new InvalidArgumentException("Deposit amount cannot exceed the booking total.");
-        if (request.Amount + received < await RequiredDepositAsync(booking, cancellationToken)) throw new InvalidArgumentException("Deposit is below the configured minimum.");
-        var method = await dbContext.PhuongThucThanhToans.SingleOrDefaultAsync(x => x.Id == request.PaymentMethodId, cancellationToken) ?? throw new ResourceNotFoundException("Payment method was not found.");
+            throw new InvalidArgumentException("Tổng tiền cọc không được vượt quá tổng tiền phòng.");
+        var minimumDeposit = await RequiredDepositAsync(booking, cancellationToken);
+        if (request.Amount + received < minimumDeposit) throw new InvalidArgumentException($"Tiền cọc thấp hơn mức tối thiểu theo chính sách cọc: cần ít nhất {minimumDeposit - received:N0} đ.");
+        var method = await dbContext.PhuongThucThanhToans.SingleOrDefaultAsync(x => x.Id == request.PaymentMethodId, cancellationToken) ?? throw new ResourceNotFoundException("Không tìm thấy phương thức thanh toán.");
         Input.OneOf(method.MaPhuongThuc, "TIEN_MAT", "CHUYEN_KHOAN", "THE", "CASH", "BANK_TRANSFER", "CARD");
         Input.OneOf(request.PaymentGateway, "MANUAL", "CASH", "BANK_TRANSFER", "CARD");
-        if (request.ShiftId.HasValue && !await dbContext.CaLamViecs.AnyAsync(x => x.Id == request.ShiftId && x.NhanVienId == (dbContext.NhanViens.Where(n => n.TaiKhoanId == accountId).Select(n => n.Id).First()) && x.TrangThai == "DANG_MO", cancellationToken)) throw new InvalidArgumentException("Shift must belong to the cashier and be open.");
+        var cashierId = await dbContext.NhanViens.Where(n => n.TaiKhoanId == accountId).Select(n => (long?)n.Id).FirstOrDefaultAsync(cancellationToken);
+        var shiftId = await CashierShift.ResolveAsync(dbContext, request.ShiftId, cashierId, cancellationToken);
         if (!await dbContext.PhuongThucThanhToans.AnyAsync(x => x.Id == request.PaymentMethodId && x.TrangThai == "HOAT_DONG", cancellationToken))
-            throw new ResourceNotFoundException($"Payment method {request.PaymentMethodId} was not found.");
+            throw new ResourceNotFoundException("Phương thức thanh toán không tồn tại hoặc đã ngừng sử dụng.");
 
         dbContext.PhieuCocs.Add(new PhieuCoc
         {
@@ -405,7 +445,7 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
             DatPhongId = bookingId,
             TaiKhoanThanhToanId = accountId,
             NhanVienXacNhanId = await actor.EmployeeIdAsync(cancellationToken),
-            CaLamViecId = request.ShiftId,
+            CaLamViecId = shiftId,
             PhuongThucId = request.PaymentMethodId,
             SoTien = request.Amount,
             CongThanhToan = request.PaymentGateway,
@@ -413,17 +453,67 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
             ThoiGianCoc = now,
             TrangThai = "DA_THANH_TOAN"
         });
+        if (pendingQr is not null)
+        {
+            // Liên kết đơn QR với phiếu cọc thủ công qua mã giao dịch (để luồng hoàn cọc cập nhật được REFUNDED).
+            pendingQr.Status = "PAID";
+            pendingQr.Amount = request.Amount;
+            pendingQr.TransactionId = request.TransactionId;
+            pendingQr.PaidAt = now;
+        }
         booking.TrangThai = "BOOKED";
         booking.UpdatedAt = now;
         foreach (var detail in booking.ChiTietDatPhongs) detail.TrangThai = "BOOKED";
         foreach (var hold in locks) { hold.TrangThai = "BOOKED"; hold.HetHanGiuCho = null; }
         await dbContext.SaveChangesAsync(cancellationToken);
-        await notifications.BookingAsync(booking, accountId, previousStatus, "Đã xác nhận cọc tại quầy.", cancellationToken);
+        await notifications.BookingAsync(booking, accountId, previousStatus,
+            pendingQr is null ? "Đã xác nhận cọc tại quầy." : "Nhân viên đã xác nhận nhận tiền cọc (QR demo).", cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return await LoadBookingResponseAsync(bookingId, cancellationToken);
     }
 
-    private async Task<IReadOnlyList<NightPriceResponse>> CalculateNightsAsync(Phong room, DateOnly checkIn, DateOnly checkOut, CancellationToken cancellationToken)
+    /// <summary>VietQR đang chạy demo (không có tài khoản sandbox / Mode = Demo). Không có cấu hình thì coi như demo.</summary>
+    private bool IsVietQrDemo => vietQrOptions?.Value.IsDemo ?? true;
+
+    private static readonly string[] DiscountAdjustments = ["GIAM_%", "GIAM_TIEN"];
+
+    /// <summary>Chính sách giá là "ưu đãi" với loại phòng này khi dòng của loại phòng đó là giảm giá.</summary>
+    private static bool IsPromotionFor(ChinhSachGia policy, long roomTypeId)
+        => policy.ChiTiet.Any(d => d.LoaiPhongId == roomTypeId && DiscountAdjustments.Contains(d.KieuDieuChinh));
+
+    /// <summary>Ưu đãi phải đang hoạt động, giảm giá cho ít nhất một loại phòng đã chọn và có ít nhất một đêm trong kỳ lưu trú.</summary>
+    private async Task ValidatePromotionAsync(long promotionId, IReadOnlyCollection<long> roomTypeIds, DateOnly checkIn, DateOnly checkOut, CancellationToken ct)
+    {
+        var promo = await dbContext.ChinhSachGias.AsNoTracking().Include(x => x.CacThuApDung).Include(x => x.ChiTiet)
+            .SingleOrDefaultAsync(x => x.Id == promotionId && x.TrangThai == "HOAT_DONG", ct)
+            ?? throw new InvalidArgumentException("Ưu đãi không tồn tại hoặc đã ngừng áp dụng.");
+        if (!roomTypeIds.Any(t => IsPromotionFor(promo, t)))
+            throw new InvalidArgumentException("Ưu đãi này không áp dụng cho loại phòng đã chọn.");
+        var anyNight = false;
+        for (var date = checkIn; date < checkOut && !anyNight; date = date.AddDays(1))
+        {
+            var weekday = (byte)(date.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)date.DayOfWeek);
+            anyNight = promo.TuNgay <= date && promo.DenNgay >= date && promo.CacThuApDung.Any(d => d.Thu == weekday);
+        }
+        if (!anyNight) throw new InvalidArgumentException("Ưu đãi này không áp dụng cho ngày lưu trú đã chọn.");
+    }
+
+    /// <summary>Ưu đãi (chính sách giảm giá) đã dùng cho booking – giữ nguyên khi đổi ngày / đổi phòng.</summary>
+    private async Task<long?> BookingPromotionAsync(IReadOnlyCollection<long> detailIds, CancellationToken ct)
+    {
+        var policyIds = await dbContext.GiaDemDatPhongs.Where(x => detailIds.Contains(x.ChiTietDatPhongId) && x.ChinhSachGiaId != null)
+            .Select(x => x.ChinhSachGiaId!.Value).Distinct().ToListAsync(ct);
+        if (policyIds.Count == 0) return null;
+        return await dbContext.ChinhSachGias.AsNoTracking()
+            .Where(x => policyIds.Contains(x.Id) && x.ChiTiet.Any(d => DiscountAdjustments.Contains(d.KieuDieuChinh)))
+            .Select(x => (long?)x.Id).FirstOrDefaultAsync(ct);
+    }
+
+    /// <summary>
+    /// Giá từng đêm. Chính sách tăng giá / giá cố định áp dụng tự động; chính sách GIẢM giá là "ưu đãi",
+    /// chỉ được xét khi khách chọn đúng ưu đãi đó (promotionId) – mỗi booking tối đa 1 ưu đãi.
+    /// </summary>
+    private async Task<IReadOnlyList<NightPriceResponse>> CalculateNightsAsync(Phong room, DateOnly checkIn, DateOnly checkOut, CancellationToken cancellationToken, long? promotionId = null)
     {
         var policies = await dbContext.ChinhSachGias.AsNoTracking().Include(x => x.CacThuApDung).Include(x => x.ChiTiet)
             .Where(x => x.TrangThai == "HOAT_DONG" && x.TuNgay <= checkOut && x.DenNgay >= checkIn)
@@ -432,7 +522,8 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
         for (var date = checkIn; date < checkOut; date = date.AddDays(1))
         {
             var weekday = (byte)(date.DayOfWeek == DayOfWeek.Sunday ? 7 : (int)date.DayOfWeek);
-            var policy = policies.Where(x => x.TuNgay <= date && x.DenNgay >= date && x.CacThuApDung.Any(d => d.Thu == weekday) && x.ChiTiet.Any(d => d.LoaiPhongId == room.LoaiPhongId))
+            var policy = policies.Where(x => x.TuNgay <= date && x.DenNgay >= date && x.CacThuApDung.Any(d => d.Thu == weekday) && x.ChiTiet.Any(d => d.LoaiPhongId == room.LoaiPhongId)
+                    && (x.Id == promotionId || !IsPromotionFor(x, room.LoaiPhongId)))
                 .OrderByDescending(x => x.MucUuTien).ThenByDescending(x => x.Id)
                 .FirstOrDefault();
             var detail = policy?.ChiTiet.SingleOrDefault(x => x.LoaiPhongId == room.LoaiPhongId);
@@ -464,13 +555,13 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
         var prices = await dbContext.GiaDemDatPhongs.Where(x => detailIds.Contains(x.ChiTietDatPhongId)).OrderBy(x => x.NgayLuuTru).ToListAsync(cancellationToken);
         var responsePrices = prices.Select(x => new NightPriceResponse(x.NgayLuuTru, x.GiaCoBan, x.PhuThuPhong, x.ChinhSachGiaId, x.TienDieuChinh, x.GiaSauDieuChinh)).ToArray();
         var hold = await dbContext.KhoaLichPhongs.Where(x => detailIds.Contains(x.ChiTietDatPhongId)).Select(x => x.HetHanGiuCho).MaxAsync(cancellationToken);
-        return ToResponse(booking, responsePrices, hold);
+        return ToResponse(booking, responsePrices, hold, await RequiredDepositAsync(booking, cancellationToken));
     }
 
-    private static BookingResponse ToResponse(DatPhong booking, IReadOnlyList<NightPriceResponse> prices, DateTime? hold) => new(
+    private static BookingResponse ToResponse(DatPhong booking, IReadOnlyList<NightPriceResponse> prices, DateTime? hold, decimal requiredDeposit) => new(
         $"bookings/{booking.Id}", booking.Id, booking.MaDatPhong, booking.TrangThai,
         DateTime.SpecifyKind(booking.DuKienNhan, DateTimeKind.Utc), DateTime.SpecifyKind(booking.DuKienTra, DateTimeKind.Utc),
-        booking.TongTienDuKien, hold, prices);
+        booking.TongTienDuKien, hold, prices, decimal.Ceiling(requiredDeposit));
 
     private static void ValidateDates(DateOnly checkIn, DateOnly checkOut)
     {

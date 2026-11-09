@@ -12,7 +12,8 @@ public sealed record CreateBookingRequest(
     string? SpecialRequest = null,
     [param: System.ComponentModel.DataAnnotations.StringLength(120)] string? ContactName = null,
     [param: System.ComponentModel.DataAnnotations.Phone, System.ComponentModel.DataAnnotations.StringLength(20)] string? ContactPhone = null,
-    [param: System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(150)] string? ContactEmail = null);
+    [param: System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(150)] string? ContactEmail = null,
+    long? PromotionId = null);
 
 public sealed record NightPrice(
     DateOnly StayDate,
@@ -32,7 +33,9 @@ public sealed record BookingResponse(
     DateTime CheckOut,
     decimal TotalRoomAmount,
     DateTime? HoldExpiresAt,
-    IReadOnlyList<NightPrice>? Nights);
+    IReadOnlyList<NightPrice>? Nights,
+    // Tiền cọc do API tính theo chính sách cọc trong DB (cùng số với QR và bên admin).
+    decimal RequiredDeposit = 0);
 
 /// <summary>Một dòng của GET /v1/me/bookings.</summary>
 public sealed record BookingListItem(

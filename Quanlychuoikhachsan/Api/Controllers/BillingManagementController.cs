@@ -150,11 +150,16 @@ public sealed class BillingManagementController(HotelDbContext db, CurrentActor 
     public async Task<IActionResult> Reconciliation(long id, CancellationToken ct) => Ok(new { Totals = await ShiftTotals(id, ct), Reconciliations = await db.Set<DoiSoatCa>().AsNoTracking().Where(x => x.CaLamViecId == id).ToListAsync(ct) });
     private async Task<Dictionary<long, decimal>> ShiftTotals(long id, CancellationToken ct)
     {
-        if (!await db.CaLamViecs.AnyAsync(x => x.Id == id, ct)) throw new ResourceNotFoundException("Shift was not found.");
+        var shift = await db.CaLamViecs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException("Shift was not found.");
         var room = await db.ThanhToanHoaDonPhongs.Where(x => x.CaLamViecId == id && x.TrangThai == "THANH_CONG").Select(x => new { x.PhuongThucId, x.SoTien }).ToListAsync(ct);
         var service = await db.Set<ThanhToanDichVu>().Where(x => x.CaLamViecId == id && x.TrangThai == "THANH_CONG").Select(x => new { x.PhuongThucId, x.SoTien }).ToListAsync(ct);
         var deposits = await db.PhieuCocs.Where(x => x.CaLamViecId == id && x.TrangThai == "DA_THANH_TOAN").Select(x => new { x.PhuongThucId, x.SoTien }).ToListAsync(ct);
-        return room.Concat(service).Concat(deposits).GroupBy(x => x.PhuongThucId).ToDictionary(g => g.Key, g => g.Sum(x => x.SoTien));
+        // Tiền thu ngân trả lại cho khách trong ca (phiếu hoàn đã chi) làm giảm số tiền phải có trong ca.
+        var end = shift.KetThucLuc ?? DateTime.UtcNow;
+        var refunds = await db.Set<PhieuHoanTien>().Where(x => x.NhanVienId == shift.NhanVienId && x.TrangThai == "THANH_CONG"
+                && x.ThoiGianHoan >= shift.BatDauLuc && x.ThoiGianHoan <= end)
+            .Select(x => new { x.PhuongThucId, SoTien = -x.SoTien }).ToListAsync(ct);
+        return room.Concat(service).Concat(deposits).Concat(refunds).GroupBy(x => x.PhuongThucId).ToDictionary(g => g.Key, g => g.Sum(x => x.SoTien));
     }
     [HttpPost("shifts/{id:long}:close"), RequirePermission("BILLING_PAYMENT_WRITE")]
     public async Task<IActionResult> Close(long id, CloseShiftRequest r, CancellationToken ct)

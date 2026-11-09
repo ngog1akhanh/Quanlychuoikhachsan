@@ -42,18 +42,30 @@ public sealed class DataView : UserControl, IReloadable
     private readonly RoundedPanel card = new() { Dock = DockStyle.Fill, Padding = new Padding(18, 14, 18, 14) };
     private readonly FlowLayoutPanel actions = new()
     {
-        Dock = DockStyle.Right, AutoSize = true, FlowDirection = FlowDirection.RightToLeft, WrapContents = false,
-        BackColor = Color.Transparent, Margin = new Padding(0)
+        Dock = DockStyle.Right,
+        AutoSize = true,
+        FlowDirection = FlowDirection.RightToLeft,
+        WrapContents = false,
+        BackColor = Color.Transparent,
+        Margin = new Padding(0)
     };
     private readonly FlowLayoutPanel filters = new()
     {
-        Dock = DockStyle.Top, Height = 0, WrapContents = false, BackColor = Color.Transparent, Padding = new Padding(0, 0, 0, 6)
+        Dock = DockStyle.Top,
+        Height = 0,
+        WrapContents = false,
+        BackColor = Color.Transparent,
+        Padding = new Padding(0, 0, 0, 6)
     };
     private readonly ModernGrid grid = new() { Dock = DockStyle.Fill };
     private readonly Label info = Inputs.Caption("", AppTheme.Small, AppTheme.TextMuted);
     private readonly FlowLayoutPanel pager = new()
     {
-        Dock = DockStyle.Bottom, Height = 44, FlowDirection = FlowDirection.RightToLeft, BackColor = Color.Transparent, Padding = new Padding(0, 8, 0, 0)
+        Dock = DockStyle.Bottom,
+        Height = 44,
+        FlowDirection = FlowDirection.RightToLeft,
+        BackColor = Color.Transparent,
+        Padding = new Padding(0, 8, 0, 0)
     };
     private readonly List<(FlatButton Button, bool NeedsRow, Func<JsonElement, bool>? When)> buttons = [];
     private Col[] columns = [];
@@ -75,7 +87,12 @@ public sealed class DataView : UserControl, IReloadable
         var header = new Panel { Dock = DockStyle.Top, Height = 44, BackColor = Color.Transparent };
         header.Controls.Add(new Label
         {
-            Text = title, Font = AppTheme.CardTitle, ForeColor = AppTheme.Text, AutoSize = true, Location = new Point(0, 8), BackColor = Color.Transparent
+            Text = title,
+            Font = AppTheme.CardTitle,
+            ForeColor = AppTheme.Text,
+            AutoSize = true,
+            Location = new Point(0, 8),
+            BackColor = Color.Transparent
         });
         header.Controls.Add(actions);
 
@@ -110,6 +127,9 @@ public sealed class DataView : UserControl, IReloadable
 
     /// <summary>Thao tác khi bấm đúp một dòng.</summary>
     public Func<JsonElement?, Task<bool>>? DefaultAction { get; set; }
+
+    /// <summary>Lia chuột vào một dòng thì hiện khung xem nhanh toàn bộ thông tin của dòng (kèm gợi ý bấm đúp).</summary>
+    public bool HoverPreview { get; set; }
 
     /// <summary>Đường dẫn trường id dùng để giữ dòng đang chọn sau khi tải lại.</summary>
     public string IdPath { get; set; } = "id";
@@ -237,6 +257,16 @@ public sealed class DataView : UserControl, IReloadable
         return dlg.ShowDialog(FindForm()) == DialogResult.OK;
     }
 
+    /// <summary>Nội dung khung xem nhanh khi lia chuột: "Cột: giá trị" từng dòng, bỏ ô trống.</summary>
+    private string PreviewText(JsonElement row)
+    {
+        var lines = columns.Select(c => (c.Header, Value: CellText(c, row)))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Value))
+            .Select(x => $"{x.Header}: {x.Value}").ToList();
+        if (DefaultAction is not null) lines.Add("» Bấm đúp để xem chi tiết");
+        return string.Join(Environment.NewLine, lines);
+    }
+
     private static string? CellText(Col c, JsonElement row)
     {
         var value = c.Value(row);
@@ -282,8 +312,15 @@ public sealed class DataView : UserControl, IReloadable
     private void Fill(string? keepId)
     {
         grid.Rows.Clear();
+        grid.ShowCellToolTips = true;
         foreach (var row in rows)
-            grid.Rows.Add(columns.Select(c => c.Value(row) ?? "").ToArray());
+        {
+            var added = grid.Rows.Add(columns.Select(c => c.Value(row) ?? "").ToArray());
+            if (!HoverPreview) continue;
+            var tip = PreviewText(row);
+            foreach (DataGridViewCell cell in grid.Rows[added].Cells) cell.ToolTipText = tip;
+        }
+        grid.Cursor = HoverPreview && DefaultAction is not null ? Cursors.Hand : Cursors.Default;
         if (keepId is not null)
         {
             var index = rows.FindIndex(r => J.Str(r, IdPath) == keepId);

@@ -103,8 +103,17 @@ public sealed partial class FrontDeskService(HotelDbContext db, BookingService b
             .Where(x => detailIds.Contains(x.ChiTietDatPhongId) && x.TrangThai == "HOLD")
             .Select(x => x.HetHanGiuCho).MaxAsync(ct);
 
+        // A1: cùng điều kiện với BookingService.ConfirmDepositAsync để app chỉ hiện nút khi API cho phép.
+        var requiredDeposit = booking.TrangThai == "HOLD" ? await bookings.RequiredDepositAsync(booking, ct) : 0;
+        var holdLocks = await db.KhoaLichPhongs.AsNoTracking().Where(x => detailIds.Contains(x.ChiTietDatPhongId)).ToListAsync(ct);
+        string? depositBlocked = null;
+        if (booking.TrangThai != "HOLD")
+            depositBlocked = "Chỉ xác nhận cọc cho booking đang giữ chỗ.";
+        else if (holdLocks.Count == 0 || holdLocks.Any(x => x.TrangThai != "HOLD" || x.HetHanGiuCho <= DateTime.UtcNow))
+            depositBlocked = "Booking đã hết hạn giữ chỗ (quá thời gian chờ cọc). Hãy hủy và tạo booking mới.";
+
         return new FrontDeskBookingDetail(summary, customer, booking.YeuCauDacBiet, HotelTime.Local(holdExpires), rooms, nights, guests,
-            deposits, invoices, cancellations, history);
+            deposits, invoices, cancellations, history, requiredDeposit, depositBlocked is null, depositBlocked);
     }
 
     public async Task<IReadOnlyList<AvailableRoom>> FindAvailableRoomsAsync(DateOnly checkIn, DateOnly checkOut, long? excludeBookingId, CancellationToken ct)

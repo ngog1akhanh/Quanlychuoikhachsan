@@ -26,8 +26,20 @@ public sealed class ServiceOperations(HotelDbContext db, CurrentActor actor, Not
         if (decimal.Round(r.Quantity, 2) != r.Quantity || r.Quantity > 9999999999.99m) throw new InvalidArgumentException("Service quantity supports at most two decimal places.");
         var service = await db.Set<DichVu>().SingleOrDefaultAsync(x => x.Id == r.ServiceId && x.TrangThai == "HOAT_DONG", ct) ?? throw new ResourceNotFoundException("Active service was not found.");
         var total = Input.Round(r.Quantity * service.DonGia); Input.Money(total, "total");
-        var row = new SuDungDichVu { MaSuDung = $"DV{Guid.NewGuid():N}", DatPhongId = booking.Id, PhongId = r.RoomId, DichVuId = service.Id,
-            TaiKhoanYeuCauId = actor.AccountId, ThoiGianYeuCau = DateTime.UtcNow, SoLuong = r.Quantity, DonGia = service.DonGia, ThanhTien = total, GhiChu = r.Note, TrangThai = "CHO_XU_LY" };
+        var row = new SuDungDichVu
+        {
+            MaSuDung = $"DV{Guid.NewGuid():N}",
+            DatPhongId = booking.Id,
+            PhongId = r.RoomId,
+            DichVuId = service.Id,
+            TaiKhoanYeuCauId = actor.AccountId,
+            ThoiGianYeuCau = DateTime.UtcNow,
+            SoLuong = r.Quantity,
+            DonGia = service.DonGia,
+            ThanhTien = total,
+            GhiChu = r.Note,
+            TrangThai = "CHO_XU_LY"
+        };
         db.Add(row); await db.SaveChangesAsync(ct);
         await NotifyNewRequestAsync(booking, service, r, ct);
         return row;
@@ -85,8 +97,15 @@ public sealed class ServiceOperations(HotelDbContext db, CurrentActor actor, Not
         if (status == "HOAN_THANH")
         {
             row.ThoiGianPhucVu = DateTime.UtcNow;
-            invoice = new HoaDonDichVu { MaHoaDon = $"HDV{Guid.NewGuid():N}", DatPhongId = row.DatPhongId, NhanVienLapId = await actor.EmployeeIdAsync(ct), NgayLap = DateTime.UtcNow,
-                TongTien = row.ThanhTien, TrangThai = row.ThanhTien == 0 ? "DA_THANH_TOAN" : "DA_PHAT_HANH" };
+            invoice = new HoaDonDichVu
+            {
+                MaHoaDon = $"HDV{Guid.NewGuid():N}",
+                DatPhongId = row.DatPhongId,
+                NhanVienLapId = await actor.EmployeeIdAsync(ct),
+                NgayLap = DateTime.UtcNow,
+                TongTien = row.ThanhTien,
+                TrangThai = row.ThanhTien == 0 ? "DA_THANH_TOAN" : "DA_PHAT_HANH"
+            };
             db.Add(invoice); await db.SaveChangesAsync(ct);
             db.Add(new ChiTietHoaDonDichVu { HoaDonDichVuId = invoice.Id, SuDungDichVuId = row.Id, ThanhTien = row.ThanhTien });
         }
@@ -124,11 +143,21 @@ public sealed class ServiceOperations(HotelDbContext db, CurrentActor actor, Not
         var method = await db.PhuongThucThanhToans.SingleOrDefaultAsync(x => x.Id == r.PaymentMethodId && x.TrangThai == "HOAT_DONG", ct) ?? throw new ResourceNotFoundException("Payment method was not found.");
         Input.OneOf(method.MaPhuongThuc, "TIEN_MAT", "CHUYEN_KHOAN", "THE", "CASH", "BANK_TRANSFER", "CARD");
         var employee = await actor.EmployeeIdAsync(ct);
-        if (r.ShiftId.HasValue && !await db.CaLamViecs.AnyAsync(x => x.Id == r.ShiftId && x.NhanVienId == employee && x.TrangThai == "DANG_MO", ct)) throw new InvalidArgumentException("Shift must be open and belong to the cashier.");
+        var shiftId = await CashierShift.ResolveAsync(db, r.ShiftId, employee, ct);
         var paid = await db.Set<ThanhToanDichVu>().Where(x => x.HoaDonDichVuId == id && x.TrangThai == "THANH_CONG").SumAsync(x => (decimal?)x.SoTien, ct) ?? 0;
         if (paid + r.Amount > invoice.TongTien) throw new InvalidArgumentException("Payment exceeds remaining balance.");
-        var row = new ThanhToanDichVu { MaThanhToan = $"TDV{Guid.NewGuid():N}", HoaDonDichVuId = id, NhanVienThuId = employee, PhuongThucId = r.PaymentMethodId,
-            CaLamViecId = r.ShiftId, SoTien = r.Amount, ThoiGianThanhToan = DateTime.UtcNow, MaGiaoDich = r.Reference, TrangThai = "THANH_CONG" };
+        var row = new ThanhToanDichVu
+        {
+            MaThanhToan = $"TDV{Guid.NewGuid():N}",
+            HoaDonDichVuId = id,
+            NhanVienThuId = employee,
+            PhuongThucId = r.PaymentMethodId,
+            CaLamViecId = shiftId,
+            SoTien = r.Amount,
+            ThoiGianThanhToan = DateTime.UtcNow,
+            MaGiaoDich = r.Reference,
+            TrangThai = "THANH_CONG"
+        };
         db.Add(row); invoice.TrangThai = paid + r.Amount == invoice.TongTien ? "DA_THANH_TOAN" : "TT_MOT_PHAN";
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return row;
     }

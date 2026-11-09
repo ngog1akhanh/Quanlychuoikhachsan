@@ -30,11 +30,39 @@ public static class RoomImages
     private const int TypeCount = 6;
     private static readonly string[] Exts = { ".jpg", ".jpeg", ".png", ".webp" };
     private static Dictionary<string, List<string>> _photos = new(StringComparer.OrdinalIgnoreCase);
+    private static string? _dir;
+    private static DateTime _dirStamp;
+    private static long _nextCheckTicks;
 
-    /// <summary>Quét thư mục ảnh một lần khi khởi động (gọi từ Program.cs).</summary>
+    /// <summary>Quét thư mục ảnh khi khởi động (gọi từ Program.cs).</summary>
     public static void Init(string webRootPath)
     {
-        var dir = Path.Combine(webRootPath, "images", "rooms", "photos");
+        _dir = Path.Combine(webRootPath, "images", "rooms", "photos");
+        Scan();
+    }
+
+    /// <summary>
+    /// Ảnh tải lên từ App quản lý được API ghi thẳng vào thư mục photos → quét lại khi thư mục thay đổi
+    /// (kiểm tra tối đa 5 giây/lần), không cần khởi động lại web.
+    /// </summary>
+    private static void RefreshIfChanged()
+    {
+        var now = DateTime.UtcNow.Ticks;
+        var next = Interlocked.Read(ref _nextCheckTicks);
+        if (_dir is null || now < next || Interlocked.CompareExchange(ref _nextCheckTicks, now + TimeSpan.TicksPerSecond * 5, next) != next) return;
+        try
+        {
+            var stamp = Directory.Exists(_dir) ? Directory.GetLastWriteTimeUtc(_dir) : DateTime.MinValue;
+            if (stamp != _dirStamp) Scan();
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+
+    private static void Scan()
+    {
+        var dir = _dir!;
+        _dirStamp = Directory.Exists(dir) ? Directory.GetLastWriteTimeUtc(dir) : DateTime.MinValue;
         var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
         if (Directory.Exists(dir))
         {
@@ -63,6 +91,7 @@ public static class RoomImages
 
     private static List<string>? Photos(string code)
     {
+        RefreshIfChanged();
         if (_photos.TryGetValue(code, out var photos) && photos.Count > 0) return photos;
         // The integrated database calls this class SUITE; LMT supplies Executive Suite photos as EXE.
         if (code.Equals("SUITE", StringComparison.OrdinalIgnoreCase) && _photos.TryGetValue("exe", out photos) && photos.Count > 0) return photos;

@@ -12,8 +12,8 @@ public sealed class SchemaMappingTests
     public void Every_mapped_table_column_exists_in_sql_schema()
     {
         using var db = new HotelDbContext(new DbContextOptionsBuilder<HotelDbContext>().UseMySql("Server=unused;Database=test;User=test", new MySqlServerVersion(new Version(8, 0, 36))).Options);
-        var folder = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../Quanlychuoikhachsan/Database/Scripts"));
-        var sql = string.Join("\n", Directory.GetFiles(folder, "*.sql").Select(File.ReadAllText));
+        var file = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../Quanlychuoikhachsan/Database/Install/hotel_management_full.sql"));
+        var sql = File.ReadAllText(file);
         var tables = Regex.Matches(sql, @"CREATE TABLE (?:IF NOT EXISTS )?(\w+)\s*\((.*?)\) ENGINE=InnoDB;", RegexOptions.Singleline)
             .ToDictionary(m => m.Groups[1].Value, m => Regex.Matches(m.Groups[2].Value, @"^\s*(\w+)\s+(?:BIGINT|VARCHAR|DECIMAL|INT|TINYINT|DATETIME|DATE|TIME|TEXT|LONGTEXT)\b", RegexOptions.Multiline).Select(c => c.Groups[1].Value).ToHashSet());
         foreach (var entity in db.Model.GetEntityTypes().Where(e => e.FindPrimaryKey() is not null))

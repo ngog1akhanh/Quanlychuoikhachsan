@@ -82,7 +82,10 @@
                                     }
 
                                     <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_busy" @onclick="CreateQrAsync">
-                                        @if (_busy) { <span class="spinner sm"></span> }
+                                        @if (_busy)
+                                        {
+                                            <span class="spinner sm"></span>
+                                        }
                                         Tạo mã QR thanh toán cọc
                                     </button>
                                 }
@@ -92,7 +95,10 @@
                                     {
                                         <div class="alert alert-warn">Mã QR đã hết hạn hoặc bị hủy. Phòng vẫn đang được giữ, bạn có thể tạo mã QR mới.</div>
                                         <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_busy" @onclick="CreateQrAsync">
-                                            @if (_busy) { <span class="spinner sm"></span> }
+                                            @if (_busy)
+                                            {
+                                                <span class="spinner sm"></span>
+                                            }
                                             Tạo mã QR mới
                                         </button>
                                     }
@@ -118,7 +124,10 @@
                                         }
 
                                         <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@_checking" @onclick="() => CheckPaidAsync(false)">
-                                            @if (_checking) { <span class="spinner sm"></span> }
+                                            @if (_checking)
+                                            {
+                                                <span class="spinner sm"></span>
+                                            }
                                             Tôi đã chuyển khoản – kiểm tra ngay
                                         </button>
 
@@ -137,41 +146,44 @@
                             else
                             {
                                 <div>
-                            @if (_methods is null)
-                            {
-                                <Loading Message="Đang tải phương thức thanh toán..." />
-                            }
-                            else if (_methods.Count == 0)
-                            {
-                                <div class="alert alert-warn">Chưa có phương thức thanh toán nào đang hoạt động trong hệ thống.</div>
-                            }
-                            else
-                            {
-                                <div class="pay-methods">
-                                    @foreach (var m in _methods)
+                                    @if (_methods is null)
                                     {
-                                        var method = m;
-                                        <label class="pay-method @(_method?.Id == method.Id ? "on" : "")">
-                                            <input type="radio" name="pm" checked="@(_method?.Id == method.Id)" @onchange="() => _method = method" />
-                                            <span><b>@method.Name</b></span>
-                                        </label>
+                                        <Loading Message="Đang tải phương thức thanh toán..." />
                                     }
-                                </div>
-                            }
+                                    else if (_methods.Count == 0)
+                                    {
+                                        <div class="alert alert-warn">Chưa có phương thức thanh toán nào đang hoạt động trong hệ thống.</div>
+                                    }
+                                    else
+                                    {
+                                        <div class="pay-methods">
+                                            @foreach (var m in _methods)
+                                            {
+                                                var method = m;
+                                                <label class="pay-method @(_method?.Id == method.Id ? "on" : "")">
+                                                    <input type="radio" name="pm" checked="@(_method?.Id == method.Id)" @onchange="() => _method = method" />
+                                                    <span><b>@method.Name</b></span>
+                                                </label>
+                                            }
+                                        </div>
+                                    }
 
-                            <div class="alert alert-warn small">
-                                <b>Chế độ demo:</b> nút bên dưới ghi nhận cọc với cổng "DEMO", chưa thu tiền thật. Khi tích hợp VNPay/MoMo/VietQR, bước này sẽ chuyển sang cổng thanh toán.
-                            </div>
+                                    <div class="alert alert-warn small">
+                                        <b>Chế độ demo:</b> nút bên dưới ghi nhận cọc với cổng "DEMO", chưa thu tiền thật. Khi tích hợp VNPay/MoMo/VietQR, bước này sẽ chuyển sang cổng thanh toán.
+                                    </div>
 
-                            @if (!string.IsNullOrEmpty(_error))
-                            {
-                                <div class="alert alert-danger">@_error</div>
-                            }
+                                    @if (!string.IsNullOrEmpty(_error))
+                                    {
+                                        <div class="alert alert-danger">@_error</div>
+                                    }
 
-                            <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@(_busy || _method is null)" @onclick="PayAsync">
-                                @if (_busy) { <span class="spinner sm"></span> }
-                                Thanh toán cọc @Fmt.Money(Deposit(booking))
-                            </button>
+                                    <button type="button" class="btn btn-primary btn-lg btn-block" disabled="@(_busy || _method is null)" @onclick="PayAsync">
+                                        @if (_busy)
+                                        {
+                                            <span class="spinner sm"></span>
+                                        }
+                                        Thanh toán cọc @Fmt.Money(Deposit(booking))
+                                    </button>
                                 </div>
                             }
                         </div>
@@ -183,6 +195,8 @@
                 <BookingSummary Rooms="State.SelectedRooms"
                                 Query="State.Query"
                                 Booking="State.CurrentBooking"
+                                PromotionName="@State.PromotionName"
+                                DiscountedTotal="@(State.PromotionId is null ? null : State.EstimatedTotal)"
                                 ShowRemove="@(!InPaymentStep)"
                                 OnRemove="OnRemoveRoom">
                     @if (!InPaymentStep)
@@ -211,7 +225,7 @@
 
     private bool InPaymentStep => State.CurrentBooking is not null;
     private string RemainingText => $"{(int)_remaining.TotalMinutes:00}:{_remaining.Seconds:00}";
-    private static decimal Deposit(BookingResponse b) => Math.Round(b.TotalRoomAmount * HotelInfo.DepositRate, 0);
+    private static decimal Deposit(BookingResponse b) => b.RequiredDeposit > 0 ? b.RequiredDeposit : Math.Round(b.TotalRoomAmount * HotelInfo.DepositRate, 0);
 
     protected override async Task OnInitializedAsync()
     {
@@ -244,7 +258,8 @@
                 State.Query.Adults,
                 State.Query.Children,
                 string.IsNullOrWhiteSpace(State.Guest.SpecialRequest) ? null : State.Guest.SpecialRequest.Trim(),
-                State.Guest.FullName.Trim(), State.Guest.PhoneNumber.Trim(), State.Guest.Email.Trim());
+                State.Guest.FullName.Trim(), State.Guest.PhoneNumber.Trim(), State.Guest.Email.Trim(),
+                State.PromotionId);
 
             State.CurrentBooking = await BookingSvc.CreateAsync(request);
             await EnterPaymentStepAsync();

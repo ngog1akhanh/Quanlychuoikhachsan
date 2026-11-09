@@ -41,10 +41,15 @@
         </details>
     }
 
+    @if (Booking is null && !string.IsNullOrEmpty(PromotionName) && DiscountedTotal is { } discounted && discounted < BaseTotal)
+    {
+        <div class="summary-row"><span>Ưu đãi</span><b>@PromotionName</b></div>
+        <div class="summary-row"><span class="muted">Giá gốc</span><s class="muted">@Fmt.Money(BaseTotal)</s></div>
+    }
     <div class="summary-row total"><span>Tổng tiền phòng</span><span>@Fmt.Money(Total)</span></div>
     @if (ShowDeposit)
     {
-        <div class="summary-row deposit"><span>Tiền cọc (@((HotelInfo.DepositRate * 100).ToString("0"))%)</span><b>@Fmt.Money(Deposit)</b></div>
+        <div class="summary-row deposit"><span>Tiền cọc (@DepositPercent)</span><b>@Fmt.Money(Deposit)</b></div>
         <div class="summary-row"><span class="muted">Thanh toán khi trả phòng</span><span class="muted">@Fmt.Money(Total - Deposit)</span></div>
     }
     <p class="muted small mt-1 mb-0">Giá chính thức từng đêm do hệ thống tính và chốt khi giữ phòng; chưa gồm VAT/phụ thu (nếu có).</p>
@@ -62,6 +67,13 @@
     [Parameter] public EventCallback<long> OnRemove { get; set; }
     [Parameter] public RenderFragment? ChildContent { get; set; }
 
-    private decimal Total => Booking?.TotalRoomAmount ?? Rooms.Sum(r => r.UnitPrice) * Query.Nights;
-    private decimal Deposit => Math.Round(Total * HotelInfo.DepositRate, 0);
+    /// <summary>Tên ưu đãi đang chọn và tổng tiền sau ưu đãi (chưa giữ phòng). Có booking thì dùng giá chốt của booking.</summary>
+    [Parameter] public string? PromotionName { get; set; }
+    [Parameter] public decimal? DiscountedTotal { get; set; }
+
+    private decimal BaseTotal => Rooms.Sum(r => r.UnitPrice) * Query.Nights;
+    private decimal Total => Booking?.TotalRoomAmount ?? DiscountedTotal ?? BaseTotal;
+    // Đã giữ phòng: dùng đúng số cọc API tính theo chính sách (khớp QR + admin). Chưa giữ phòng: tạm tính theo tỷ lệ chính sách.
+    private decimal Deposit => Booking is { RequiredDeposit: > 0 } b ? b.RequiredDeposit : Math.Round(Total * HotelInfo.DepositRate, 0);
+    private string DepositPercent => (Total > 0 ? Deposit / Total * 100 : HotelInfo.DepositRate * 100).ToString("0.##") + "%";
 }

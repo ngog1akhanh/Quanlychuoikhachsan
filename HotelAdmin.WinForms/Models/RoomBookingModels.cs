@@ -73,7 +73,8 @@ public sealed record FrontDeskCustomer(long Id, string Code, string FullName, st
 public sealed record FrontDeskBookingDetail(
     FrontDeskBookingItem Summary, FrontDeskCustomer Customer, string? SpecialRequest, DateTime? HoldExpiresAt,
     List<BookingRoomLine> Rooms, List<BookingNightLine> Nights, List<StayGuestDto> Guests, List<DepositLine> Deposits,
-    List<InvoiceLine> Invoices, List<CancellationLine> Cancellations, List<StatusHistoryLine> History);
+    List<InvoiceLine> Invoices, List<CancellationLine> Cancellations, List<StatusHistoryLine> History,
+    decimal RequiredDeposit = 0, bool CanConfirmDeposit = false, string? DepositBlockedReason = null);
 
 public sealed record NewCustomerRequest(string FullName, string? Phone, string? Email, string? IdentityNumber, string? Address);
 

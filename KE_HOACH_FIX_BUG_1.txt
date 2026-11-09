@@ -1,0 +1,171 @@
+================================================================================
+  KẾ HOẠCH XỬ LÝ "fix_bug 1.txt" - CÁC HƯỚNG CÓ THỂ LÀM TRƯỚC
+  Ngày lập: 05/11/2026 - dựa trên code hiện tại (commit b589c86)
+================================================================================
+
+Cách đọc:
+  [LỖI]       lỗi code, đã tìm ra nguyên nhân
+  [GIAO DIỆN] chạy đúng nhưng hiển thị / thao tác chưa ổn
+  [DỮ LIỆU]   thiếu dữ liệu mẫu nên màn hình / báo cáo trống
+  [GIẢI THÍCH] hệ thống làm đúng thiết kế, chỉ cần nói lại cho tester
+  [CẦN CHỐT]  phải thống nhất nghiệp vụ trước khi làm
+
+Thứ tự đề xuất: NHÓM A -> B -> C (làm ngay, không cần chốt gì), song song
+chốt các câu hỏi ở NHÓM D, rồi làm NHÓM E.
+
+
+================================================================================
+NHÓM A - SỬA LỖI TIỀN / NGHIỆP VỤ (ưu tiên cao, làm ngay)
+================================================================================
+
+A1. Xác nhận cọc bằng tay bị lỗi                                       [LỖI]
+    Nguyên nhân:
+      - Ô "Phương thức" có VietQR, nhưng API không cho xác nhận VietQR bằng tay.
+      - App tự điền 30%, trong khi chính sách cọc có thể yêu cầu cao hơn
+        -> báo "Deposit is below the configured minimum".
+      - Nút hiện cả khi booking "Chờ cọc", nhưng API chỉ nhận HOLD/BOOKED.
+      - Booking web quá 15 phút đã "Hết hạn"; booking có đơn QR đang chờ
+        thì bị chặn - lỗi báo bằng tiếng Anh nên người dùng không hiểu.
+    Hướng xử lý:
+      - Bỏ VietQR khỏi danh sách phương thức ở quầy.
+      - API trả "số cọc tối thiểu" theo chính sách -> app điền đúng số đó.
+      - Chỉ hiện nút "Xác nhận cọc" khi API cho phép.
+      - Đổi các thông báo lỗi cọc sang tiếng Việt, nói rõ cách xử lý
+        (vd: "Booking còn đơn QR chờ thanh toán - vào Hóa đơn > Đơn cọc QR").
+
+A2. Ca thu ngân: đối soát không ghi nhận tiền khách đã trả             [LỖI]
+    Nguyên nhân: đối soát chỉ cộng các khoản thu có gắn mã ca. Tab Hóa đơn có
+    gắn, nhưng thu tiền khi TRẢ PHÒNG và CỌC TẠI QUẦY không gắn mã ca.
+    Hướng xử lý: hai form này tự lấy ca đang mở của nhân viên và gửi kèm;
+    chưa mở ca thì cảnh báo "khoản thu sẽ không vào đối soát ca".
+
+A3. Hủy phòng: tiền hoàn nhảy về 0đ, lập phiếu hoàn tối đa 0đ   [GIẢI THÍCH + GIAO DIỆN]
+    Nguyên nhân: chính sách "Hủy linh hoạt" = hủy trước >=48h hoàn 100%,
+    >=24h hoàn 50%, <24h hoàn 0%. Booking demo nhận phòng ngay hôm nay
+    -> hoàn dự kiến 0đ; ô nhập bị giới hạn tối đa 0 nên nhập gì cũng về 0.
+    Hướng xử lý:
+      - Hộp duyệt hủy ghi rõ: "Hủy trước X giờ -> hoàn Y% = Z đ theo chính sách".
+      - Không còn tiền có thể hoàn thì khóa nút "Lập phiếu hoàn" và ghi lý do.
+      - (Tùy chọn) cho quản lý hoàn vượt chính sách, bắt buộc nhập lý do.
+
+A4. Kho: không xác nhận phiếu nhập / sửa phiếu nhập không cập nhật  [LỖI - cần tái hiện]
+    Lần sửa 03/11 đã xử lý một phần. Làm lại theo docs/KIEM_THU_KHO.txt với
+    phiếu nháp DEMO-KHO-PN03 trên bản mới, ghi lại thông báo lỗi cụ thể rồi sửa.
+
+A5. Nhật ký hệ thống: cột ID và dữ liệu bị lỗi                         [LỖI]
+    Hướng xử lý: hiển thị tên bảng, hành động (thêm/sửa/xóa), người làm và
+    tóm tắt thay đổi dễ đọc thay vì JSON thô / mã id.
+
+
+================================================================================
+NHÓM B - XEM CHI TIẾT, SỬA, GIAO DIỆN (làm ngay, ít rủi ro)
+================================================================================
+
+B1. Thêm "Xem chi tiết" (bấm đúp hoặc nút "Xem") cho:          [GIAO DIỆN]
+      công việc buồng phòng, sự cố & hư hỏng, dịch vụ, phiếu cọc, tài sản.
+
+B2. Thêm nút "Sửa" cho:                                        [GIAO DIỆN]
+      sự cố & hư hỏng; chính sách cọc, chính sách hủy, phụ thu sớm/trễ.
+
+B3. Lỗi hiển thị:                                              [GIAO DIỆN]
+      - Trang Đặt phòng: nút lọc bị che một phần.
+      - Form ghi nhận sự cố: ô "Do khách gây ra" lệch.
+      - Xem chi tiết hóa đơn phòng / dịch vụ: cột Loại, Thời gian bị cắt chữ.
+
+B4. Form sự cố & hư hỏng:                                      [GIAO DIỆN]
+      - Bỏ ô "Chi phí thực tế" khi ghi nhận (chỉ nhập lúc xử lý xong).
+      - Khi chuyển "Đang xử lý": thêm lựa chọn chuyển phòng sang Bảo trì.
+      - Ghi nhận sự cố xong gửi thông báo cho buồng phòng / quản lý.
+      - Ảnh minh chứng chọn file từ máy: cần thêm API tải ảnh (hiện chỉ lưu
+        đường dẫn) -> làm sau cùng nhóm này.
+
+B5. Buồng phòng:                                               [GIẢI THÍCH + GIAO DIỆN]
+      - "Chỉ việc của tôi" = chỉ hiện việc được giao cho tài khoản đang
+        đăng nhập -> đổi nhãn thành "Chỉ việc được giao cho tôi".
+      - Bấm "Bắt đầu" khi chưa phân công = người bấm tự nhận việc (đúng
+        thiết kế) -> thêm hộp xác nhận "Bạn sẽ nhận việc này".
+      - Tài khoản buồng phòng không có "Phân công" là đúng phân quyền
+        (chỉ quản lý / lễ tân giao việc).
+
+B6. Thông báo khi thêm dịch vụ mới vào danh mục.                [GIAO DIỆN]
+
+B7. Phòng / Loại phòng / Lịch phòng:                           [GIAO DIỆN]
+      - Form thêm loại phòng: thêm "số phòng tạo kèm" và ảnh; kiểm tra loại
+        mới hiện trên web.
+      - Lịch phòng: thêm chú thích màu, tooltip tên khách + ngày.
+
+B8. Kho:                                                       [GIẢI THÍCH + GIAO DIỆN]
+      - "Cảnh báo tồn thấp": liệt kê mặt hàng dưới mức tồn tối thiểu ->
+        đổi nhãn rõ hơn, chuyển sang tab Mặt hàng.
+      - Tài sản được tạo tự động khi xác nhận phiếu nhập hàng có serial,
+        không có "phiếu tài sản" riêng -> ghi chú ngay trên tab Tài sản.
+
+
+================================================================================
+NHÓM C - DỮ LIỆU MẪU & BÁO CÁO (làm ngay)
+================================================================================
+
+C1. Seed bổ sung (rồi sinh lại hotel_management_full.sql):    [DỮ LIỆU]
+      sự cố & hư hỏng, yêu cầu + hóa đơn dịch vụ trong tháng hiện tại,
+      phiếu hoàn tiền, ca thu ngân (đang mở + đã đóng có đối soát),
+      chính sách giá đang áp dụng.
+
+C2. Báo cáo doanh thu dịch vụ / HĐ theo thời gian trống:       [DỮ LIỆU]
+      seed hiện tại không có hóa đơn dịch vụ gần đây -> có số liệu sau C1.
+
+C3. HĐ theo nhân viên:                                         [GIAO DIỆN]
+      - Thêm gộp theo tháng.
+      - Chỉ có lễ tân là đúng: báo cáo tính theo người LẬP hóa đơn;
+        bỏ các dòng nhân viên không lập hóa đơn nào.
+
+
+================================================================================
+NHÓM D - CẦN CHỐT TRƯỚC KHI LÀM (đề xuất của Claude đánh dấu *)
+================================================================================
+
+D1. Đổi phòng sang Bảo trì / Ngừng hoạt động khi còn booking tương lai
+    (hiện API chặn hẳn - phòng demo nào cũng có booking nên không đổi được)
+      * a) Cho đổi kèm cảnh báo liệt kê booking bị ảnh hưởng, báo lễ tân
+           đổi phòng cho các booking đó.
+        b) Cho đổi và hệ thống tự chuyển booking sang phòng trống cùng loại.
+        c) Giữ chặn, chỉ báo rõ bằng tiếng Việt.
+
+D2. Khách đến hạn trả muốn gia hạn nhưng phòng đã có người đặt tiếp
+      * a) Trong form gia hạn: phòng bận thì cho chọn phòng trống cho các
+           đêm thêm (ở phòng cũ đến hết hạn cũ, đêm gia hạn ở phòng mới).
+        b) Gia hạn và chuyển cả booking sang phòng mới ngay.
+        c) Không gia hạn, tạo booking mới cho các đêm thêm.
+
+D3. Khách không đến (No-show) - xử lý tiền cọc
+    (hiện chỉ đổi trạng thái + nhả phòng, cọc giữ nguyên, không ghi gì thêm)
+      * a) Giữ toàn bộ cọc (thông lệ khách sạn), ghi rõ trên booking/báo cáo.
+        b) Hoàn theo chính sách hủy.
+        c) Quản lý nhập số tiền hoàn khi đánh dấu No-show.
+
+D4. "Chính sách giảm giá" trên web
+      * a) Hiện các chính sách giá đang áp dụng (giảm theo mùa / cuối tuần)
+           và giá sau giảm trên thẻ phòng - không đổi database.
+        b) Thêm module mã giảm giá mới - tốn công, rủi ro trước hạn 20/11.
+
+D5. Chi tiết booking hiện lẫn khách đang ở và khách mới đặt (sau khi hủy)
+    Code chi tiết booking đã lọc đúng theo từng booking -> cần biết mở từ
+    màn hình nào (Phòng / Lịch phòng / Nhận-trả phòng) + ảnh chụp để tái hiện.
+
+
+================================================================================
+NHÓM E - SAU KHI CHỐT NHÓM D
+================================================================================
+
+E1. Làm D1, D2, D3 theo phương án đã chốt (API + app + test).
+E2. Sửa lỗi D5 sau khi tái hiện được.
+E3. Phần web (nên giao cho người làm web - Trung):
+      lỗi CSS danh mục, logo/banner, bỏ icon trong chi tiết phòng,
+      mục đánh giá (API đánh giá đã có sẵn), mục chính sách giá (theo D4).
+
+
+================================================================================
+GHI CHÚ
+================================================================================
+- Trước mỗi nhóm sẽ sao lưu file vào _backup/ như các lần trước.
+- Sau mỗi nhóm: Rebuild Solution, chạy lại test, kiểm theo đúng dòng tester báo.
+- Hạn nộp khoảng 20/11: nên xong A + C trước (ảnh hưởng tiền và dữ liệu demo), rồi B, D/E.

@@ -27,6 +27,7 @@ builder.Services.AddScoped<BookingService>();
 builder.Services.AddScoped<PaymentService>();
 builder.Services.AddScoped<CustomerService>();
 builder.Services.AddScoped<ReviewService>();
+builder.Services.AddScoped<HotelInfoService>();
 
 var app = builder.Build();
 

@@ -123,6 +123,10 @@ public sealed class BookingsPage : PageBase
         grid.AddText("channel", "Kênh", 60);
         grid.AddStatus("status", "Trạng thái", v => StatusStyles.ForBooking(v as string), 95);
         grid.SelectionChanged += async (_, _) => await OnSelectionChangedAsync();
+        // Bấm đúp một dòng: mở trang chi tiết booking (cửa sổ lớn, có đủ nút thao tác).
+        grid.CellDoubleClick += async (_, e) => { if (e.RowIndex >= 0) await OpenDetailPageAsync(e.RowIndex); };
+        grid.ShowCellToolTips = true;
+        grid.Cursor = Cursors.Hand;
 
         var pager = new FlowLayoutPanel { Dock = DockStyle.Bottom, Height = 46, FlowDirection = FlowDirection.RightToLeft, BackColor = Color.Transparent, Padding = new Padding(0, 8, 0, 0) };
         var next = new FlatButton { IconGlyph = "", Size = new Size(40, 32), FillColor = AppTheme.Surface, BorderColor = AppTheme.Border };
@@ -210,8 +214,13 @@ public sealed class BookingsPage : PageBase
         var keep = selectedId;
         grid.Rows.Clear();
         foreach (var b in rows)
-            grid.Rows.Add(b.BookingCode, $"{b.CustomerName}\n{b.CustomerPhone}".Trim(), b.Rooms, b.CheckIn.ToString("dd/MM HH:mm"),
+        {
+            var added = grid.Rows.Add(b.BookingCode, $"{b.CustomerName}\n{b.CustomerPhone}".Trim(), b.Rooms, b.CheckIn.ToString("dd/MM HH:mm"),
                 b.CheckOut.ToString("dd/MM HH:mm"), b.Total, BookingDetailView.ChannelText(b.Channel), b.Status);
+            // Lia chuột vào dòng: khung xem nhanh thông tin booking.
+            var tip = PreviewText(b);
+            foreach (DataGridViewCell cell in grid.Rows[added].Cells) cell.ToolTipText = tip;
+        }
 
         // Giữ dòng đang chọn sau khi tải lại.
         var index = keep is null ? -1 : rows.FindIndex(r => r.Id == keep);
@@ -239,6 +248,24 @@ public sealed class BookingsPage : PageBase
     }
 
     private async Task ShowDetailAsync(long id) => detail.SetDetail(await Api.GetBookingDetailAsync(id));
+
+    private async Task OpenDetailPageAsync(int rowIndex)
+    {
+        if (rowIndex >= rows.Count) return;
+        using var dlg = new DlgBookingDetail(Api, Session, rows[rowIndex].Id);
+        dlg.ShowDialog(FindForm());
+        if (dlg.Changed) await ReloadSafeAsync();
+    }
+
+    private static string PreviewText(FrontDeskBookingItem b) => string.Join(Environment.NewLine,
+        $"Mã: {b.BookingCode}",
+        $"Khách: {b.CustomerName}{(string.IsNullOrWhiteSpace(b.CustomerPhone) ? "" : " · " + b.CustomerPhone)}",
+        $"Phòng: {b.Rooms}",
+        $"Nhận: {b.CheckIn:dd/MM/yyyy HH:mm}  →  Trả: {b.CheckOut:dd/MM/yyyy HH:mm} ({b.Nights} đêm)",
+        $"Khách lưu trú: {b.Adults} người lớn, {b.Children} trẻ em",
+        $"Tổng tiền: {b.Total:#,0} đ · Đã cọc: {b.DepositPaid:#,0} đ",
+        $"Kênh: {BookingDetailView.ChannelText(b.Channel)} · Trạng thái: {StatusStyles.ForBooking(b.Status).Label}",
+        "» Bấm đúp để mở trang chi tiết");
 
     private async Task OnDetailActionAsync(string action)
     {
@@ -283,7 +310,7 @@ public sealed class BookingsPage : PageBase
                 if (refund is null) return;
                 var note = Ui.Prompt(FindForm(), "Ghi chú duyệt", "Ghi chú (không bắt buộc):", null, required: false);
                 await Api.ApproveCancellationAsync(c.Id, refund.Value, note);
-                Ui.Info(FindForm(), $"Đã hủy booking {c.BookingCode}, hoàn {refund.Value:#,0} đ. Phiếu hoàn tiền xử lý ở module Hóa đơn (GĐ3).");
+                Ui.Info(FindForm(), $"Đã hủy booking {c.BookingCode}, hoàn {refund.Value:#,0} đ. Đã lưu phiếu hoàn (trạng thái Đã hoàn cọc) ở Hóa đơn → Phiếu hoàn tiền.");
             }
             else
             {
@@ -295,6 +322,18 @@ public sealed class BookingsPage : PageBase
             await ReloadSafeAsync();
         }
         catch (ApiException ex) { Ui.Error(FindForm(), ex.Message); }
+    }
+
+    private void InitializeComponent()
+    {
+        SuspendLayout();
+        // 
+        // BookingsPage
+        // 
+        Name = "BookingsPage";
+        Size = new Size(1428, 891);
+        ResumeLayout(false);
+
     }
 
     private async Task ReloadSafeAsync()

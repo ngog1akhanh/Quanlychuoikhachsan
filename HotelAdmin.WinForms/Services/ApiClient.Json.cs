@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
@@ -38,6 +39,48 @@ public sealed partial class ApiClient
             if (body is not null) request.Content = JsonContent.Create(body, body.GetType(), null, Json);
             return await http.SendAsync(request, ct);
         });
+        return await ReadRawAsync(response, ct);
+    }
+
+    /// <summary>
+    /// Tải file lên (multipart/form-data, mỗi file một trường fieldName). Dùng cho ảnh loại phòng:
+    /// POST v1/room-types/{id}/images:upload với fieldName = "files".
+    /// </summary>
+    public async Task<JsonElement> UploadFilesAsync(string url, IEnumerable<string> paths, string fieldName = "files", CancellationToken ct = default)
+    {
+        var files = new List<(string Name, byte[] Bytes)>();
+        foreach (var path in paths)
+        {
+            try { files.Add((Path.GetFileName(path), await File.ReadAllBytesAsync(path, ct))); }
+            catch (IOException ex) { throw new ApiException(HttpStatusCode.BadRequest, $"Không đọc được file {Path.GetFileName(path)}: {ex.Message}"); }
+            catch (UnauthorizedAccessException) { throw new ApiException(HttpStatusCode.BadRequest, $"Không có quyền đọc file {Path.GetFileName(path)}."); }
+        }
+        using var response = await SendSafeAsync(async () =>
+        {
+            // Tạo nội dung mới mỗi lần gửi (cần khi phải gửi lại sau redirect).
+            using var form = new MultipartFormDataContent();
+            foreach (var (name, bytes) in files)
+            {
+                var part = new ByteArrayContent(bytes);
+                part.Headers.ContentType = new MediaTypeHeaderValue(ImageMime(name));
+                form.Add(part, fieldName, name);
+            }
+            using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(baseUri, url)) { Content = form };
+            return await http.SendAsync(request, ct);
+        });
+        return await ReadRawAsync(response, ct);
+    }
+
+    private static string ImageMime(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() switch
+    {
+        ".png" => "image/png",
+        ".webp" => "image/webp",
+        ".jpg" or ".jpeg" => "image/jpeg",
+        _ => "application/octet-stream"
+    };
+
+    private async Task<JsonElement> ReadRawAsync(HttpResponseMessage response, CancellationToken ct)
+    {
         if (response.IsSuccessStatusCode)
         {
             if (response.StatusCode == HttpStatusCode.NoContent) return default;

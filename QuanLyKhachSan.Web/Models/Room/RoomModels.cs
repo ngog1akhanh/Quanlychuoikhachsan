@@ -21,8 +21,11 @@ public sealed record PublicRoom(
     public string BedLabel => string.IsNullOrWhiteSpace(BedDescription) ? "Đang cập nhật loại giường" : BedDescription;
     public string VariantName => RoomTypeName + (BedDescription switch
     {
-        "1 giường đơn" => " Single", "2 giường đơn" => " Twin", "1 giường đôi" => " Double",
-        null or "" => "", _ => " · " + BedDescription
+        "1 giường đơn" => " Single",
+        "2 giường đơn" => " Twin",
+        "1 giường đôi" => " Double",
+        null or "" => "",
+        _ => " · " + BedDescription
     });
     public string GroupKey => RoomTypeCode + "|" + BedDescription;
     public decimal UnitPrice => BaseNightlyPrice + NightSurcharge;
@@ -43,7 +46,10 @@ public sealed class RoomSearchQuery
 
     public RoomSearchQuery Clone() => new()
     {
-        CheckIn = CheckIn, CheckOut = CheckOut, Adults = Adults, Children = Children
+        CheckIn = CheckIn,
+        CheckOut = CheckOut,
+        Adults = Adults,
+        Children = Children
     };
 
     /// <summary>Chuỗi query dùng cho URL: checkIn=...&amp;checkOut=...&amp;adults=..&amp;children=..</summary>
@@ -78,8 +84,11 @@ public static class HotelInfo
     public const string CheckInTime = "14:00";
     public const string CheckOutTime = "12:00";
     public const int HoldMinutes = 15;
-    /// <summary>Tỷ lệ cọc hiển thị (server hiện chỉ kiểm tra cọc ≤ tổng tiền).</summary>
-    public const decimal DepositRate = 0.3m;
+    /// <summary>
+    /// Tỷ lệ cọc để TẠM TÍNH trước khi giữ phòng. Mặc định 30%, được cập nhật theo chính sách cọc trong DB
+    /// mỗi khi tải /v1/public/hotel-info (HotelInfoService). Sau khi giữ phòng luôn dùng BookingResponse.RequiredDeposit.
+    /// </summary>
+    public static decimal DepositRate { get; set; } = 0.3m;
 
     public static readonly (string Title, string Text)[] Policies =
     {
@@ -101,3 +110,6 @@ public static class HotelInfo
     ("31/12/2026", "Countdown chào năm mới", "Cùng đón giao thừa trên sân thượng với tầm nhìn toàn cảnh thành phố."),
 };
 }
+
+/// <summary>Báo giá API trả cho một phòng (tổng kỳ lưu trú + từng đêm), dùng khi áp dụng ưu đãi.</summary>
+public sealed record RoomQuote(long RoomId, decimal Total, IReadOnlyList<QuotedNight> Nights);

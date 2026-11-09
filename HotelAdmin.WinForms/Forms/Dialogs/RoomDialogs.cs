@@ -155,14 +155,19 @@ public sealed class DlgRoomType : DialogBase
     private readonly NumericUpDown price = Inputs.Number(800000, 0, 1_000_000_000, 0, 50000);
     private readonly TextBox description = Inputs.Text(null, true, 70);
     private readonly CheckBox active = new() { Text = "Đang kinh doanh", AutoSize = true, Checked = true };
-    // Chỉ dùng khi thêm mới: tạo kèm phòng và ảnh đại diện.
+    // Chỉ dùng khi thêm mới: tạo kèm phòng.
     private readonly NumericUpDown roomCount = Inputs.Number(0, 0, 50);
     private readonly TextBox firstNumber = Inputs.Text();
     private readonly TextBox floor = Inputs.Text();
-    private readonly TextBox imageUrl = Inputs.Text();
+    // Ảnh chọn từ máy (thêm mới và sửa): API lưu vào thư mục photos của web khách, tên {mã loại}-{số}.jpg.
+    private static readonly string[] PhotoExtensions = [".jpg", ".jpeg", ".png", ".webp"];
+    private const long MaxPhotoBytes = 5 * 1024 * 1024;
+    private static string? lastPhotoFolder;
+    private readonly List<string> photoFiles = [];
+    private readonly Label photoInfo = new() { AutoSize = true, MaximumSize = new Size(300, 46), Font = AppTheme.Small, ForeColor = AppTheme.TextMuted, Margin = new Padding(10, 8, 0, 0), Text = "Chưa chọn ảnh" };
 
     public DlgRoomType(ApiClient api, RoomTypeSummary? current)
-        : base(current is null ? "Thêm loại phòng" : $"Loại phòng {current.Name}", 600, current is null ? 660 : 520,
+        : base(current is null ? "Thêm loại phòng" : $"Loại phòng {current.Name}", 600, current is null ? 720 : 600,
             current is null ? null : $"{current.RoomCount} phòng · {current.OccupiedCount} đang ở")
     {
         this.api = api;
@@ -175,6 +180,7 @@ public sealed class DlgRoomType : DialogBase
         grid.Add("Giá cơ bản / đêm (đ)", price);
         grid.Add("Diện tích (m²)", area);
         grid.Add("Mô tả", description, 2);
+        grid.Add("Ảnh loại phòng (JPG / PNG / WEBP, tối đa 5 MB/ảnh)", PhotoPicker(), 2);
         if (current is not null) grid.AddFull(active);
         else
         {
@@ -182,11 +188,13 @@ public sealed class DlgRoomType : DialogBase
             grid.Add("Số phòng tạo kèm", roomCount);
             grid.Add("Số phòng đầu tiên (vd 501)", firstNumber);
             grid.Add("Tầng", floor);
-            grid.Add("Ảnh đại diện (URL https://…)", imageUrl);
             grid.AddFull(new Label
             {
                 Text = "Phòng tạo kèm có mã P + số phòng (P501, P502…), trạng thái Sẵn sàng. Loại phòng chỉ hiện trên web khi có ít nhất 1 phòng.",
-                AutoSize = true, MaximumSize = new Size(540, 0), Font = AppTheme.Small, ForeColor = AppTheme.TextMuted
+                AutoSize = true,
+                MaximumSize = new Size(540, 0),
+                Font = AppTheme.Small,
+                ForeColor = AppTheme.TextMuted
             });
         }
 
@@ -203,7 +211,84 @@ public sealed class DlgRoomType : DialogBase
         Body.Controls.Add(grid);
         AddButton(current is null ? "Thêm loại phòng" : "Lưu", true, async (_, _) => await SaveAsync());
         AddCancelButton();
+        if (current is not null) Shown += async (_, _) => await ShowExistingPhotosAsync(current.Id);
     }
+
+    // ---------------- Ảnh loại phòng ----------------
+    private Control PhotoPicker()
+    {
+        var row = new FlowLayoutPanel { Height = 52, WrapContents = false, BackColor = AppTheme.Surface };
+        var choose = new FlatButton { Text = "Chọn ảnh từ máy…", Size = new Size(160, 34), Margin = new Padding(0) };
+        choose.Click += (_, _) => ChoosePhotos();
+        var clear = new FlatButton { Text = "Bỏ chọn", Size = new Size(90, 34), Margin = new Padding(8, 0, 0, 0), FillColor = AppTheme.Surface, BorderColor = AppTheme.Border };
+        clear.Click += (_, _) => { photoFiles.Clear(); UpdatePhotoInfo(); };
+        row.Controls.Add(choose);
+        row.Controls.Add(clear);
+        row.Controls.Add(photoInfo);
+        return row;
+    }
+
+    private void ChoosePhotos()
+    {
+        using var dialog = new OpenFileDialog
+        {
+            Title = "Chọn ảnh loại phòng",
+            Filter = "Ảnh (*.jpg;*.jpeg;*.png;*.webp)|*.jpg;*.jpeg;*.png;*.webp",
+            Multiselect = true,
+            InitialDirectory = lastPhotoFolder ?? DefaultPhotoFolder()
+        };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        lastPhotoFolder = Path.GetDirectoryName(dialog.FileNames.FirstOrDefault());
+        var rejected = new List<string>();
+        foreach (var file in dialog.FileNames)
+        {
+            var info = new FileInfo(file);
+            if (!PhotoExtensions.Contains(info.Extension, StringComparer.OrdinalIgnoreCase)) rejected.Add($"{info.Name}: không phải JPG/PNG/WEBP");
+            else if (info.Length > MaxPhotoBytes) rejected.Add($"{info.Name}: lớn hơn 5 MB");
+            else if (!photoFiles.Contains(file, StringComparer.OrdinalIgnoreCase)) photoFiles.Add(file);
+        }
+        if (photoFiles.Count > 10)
+        {
+            rejected.Add($"Mỗi lần chỉ tải tối đa 10 ảnh – đã bỏ {photoFiles.Count - 10} ảnh cuối.");
+            photoFiles.RemoveRange(10, photoFiles.Count - 10);
+        }
+        UpdatePhotoInfo();
+        if (rejected.Count > 0) Ui.Error(this, "Không dùng được:\n" + string.Join("\n", rejected));
+    }
+
+    private void UpdatePhotoInfo()
+        => photoInfo.Text = photoFiles.Count == 0 ? "Chưa chọn ảnh"
+            : $"{photoFiles.Count} ảnh: " + string.Join(", ", photoFiles.Select(f => Path.GetFileName(f)));
+
+    /// <summary>
+    /// Thư mục mở sẵn khi chọn ảnh: appsettings "PhotoFolder" → thư mục photos của web khách trong solution
+    /// (QuanLyKhachSan.Web/wwwroot/images/rooms/photos) → thư mục Ảnh của Windows.
+    /// </summary>
+    private static string DefaultPhotoFolder()
+    {
+        var configured = AppConfig.Load().PhotoFolder;
+        if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured)) return configured;
+        for (var dir = new DirectoryInfo(AppContext.BaseDirectory); dir is not null; dir = dir.Parent)
+        {
+            var photos = Path.Combine(dir.FullName, "QuanLyKhachSan.Web", "wwwroot", "images", "rooms", "photos");
+            if (Directory.Exists(photos)) return photos;
+        }
+        return Environment.GetFolderPath(Environment.SpecialFolder.MyPictures);
+    }
+
+    private async Task ShowExistingPhotosAsync(long typeId)
+    {
+        try
+        {
+            var images = J.Items(await api.GetJsonAsync($"v1/room-types/{typeId}/images"));
+            if (photoFiles.Count == 0 && images.Count > 0)
+                photoInfo.Text = $"Đã có {images.Count} ảnh tải lên qua app. Chọn thêm để bổ sung.";
+        }
+        catch (ApiException) { /* chỉ là thông tin phụ */ }
+    }
+
+    private Task UploadPhotosAsync(long typeId)
+        => api.UploadFilesAsync($"v1/room-types/{typeId}/images:upload", photoFiles);
 
     private async Task SaveAsync()
     {
@@ -215,9 +300,6 @@ public sealed class DlgRoomType : DialogBase
             var count = (int)roomCount.Value;
             var start = 0;
             if (count > 0 && !int.TryParse(firstNumber.Text.Trim(), out start)) { Ui.Error(this, "Nhập số phòng đầu tiên là số (ví dụ 501)."); return; }
-            var url = imageUrl.Text.Trim();
-            if (url.Length > 0 && !(Uri.TryCreate(url, UriKind.Absolute, out var u) && u.Scheme is "http" or "https"))
-            { Ui.Error(this, "Đường dẫn ảnh phải bắt đầu bằng http:// hoặc https://"); return; }
             RoomTypeSummaryLite? created = null;
             ok = await RunAsync(async () =>
             {
@@ -232,7 +314,7 @@ public sealed class DlgRoomType : DialogBase
                     area.Value, price.Value, description.Text, "HOAT_DONG"));
             }
             catch (ApiException) { }
-            await CreateExtrasAsync(created.Id, count, start, url);
+            await CreateExtrasAsync(created.Id, count, start);
         }
         else
         {
@@ -240,12 +322,18 @@ public sealed class DlgRoomType : DialogBase
                 !Ui.Confirm(this, "Đổi giá cơ bản chỉ áp dụng cho booking mới; booking đã đặt giữ giá đã chốt. Tiếp tục?")) return;
             ok = await RunAsync(() => api.UpdateRoomTypeAsync(current.Id, new UpdateRoomTypeRequest(name.Text.Trim(), (int)adults.Value,
                 (int)children.Value, area.Value, price.Value, description.Text, active.Checked ? "HOAT_DONG" : "NGUNG_SU_DUNG")));
+            // Lỗi tải ảnh: giữ hộp thoại để thử lại (lưu thông tin ở trên chạy lại cũng không sao).
+            if (ok && photoFiles.Count > 0)
+            {
+                ok = await RunAsync(() => UploadPhotosAsync(current.Id));
+                if (ok) Ui.Info(this, $"Đã tải lên {photoFiles.Count} ảnh. Web khách hiện ảnh mới sau vài giây.");
+            }
         }
         if (ok) CloseOk();
     }
 
-    /// <summary>Tạo các phòng kèm theo và ảnh đại diện cho loại phòng mới; lỗi từng phần được gom lại để báo một lần.</summary>
-    private async Task CreateExtrasAsync(long typeId, int count, int start, string url)
+    /// <summary>Tạo các phòng kèm theo và tải ảnh cho loại phòng mới; lỗi từng phần được gom lại để báo một lần.</summary>
+    private async Task CreateExtrasAsync(long typeId, int count, int start)
     {
         var errors = new List<string>();
         var made = 0;
@@ -263,14 +351,15 @@ public sealed class DlgRoomType : DialogBase
                 }
                 catch (ApiException ex) { errors.Add($"Phòng {number}: {ex.Message}"); }
             }
-            if (url.Length > 0)
+            if (photoFiles.Count > 0)
             {
-                try { await api.PostJsonAsync($"v1/room-types/{typeId}/images", new { url, alt_text = name.Text.Trim(), cover = true, order = 0 }); }
-                catch (ApiException ex) { errors.Add($"Ảnh: {ex.Message}"); }
+                try { await UploadPhotosAsync(typeId); }
+                catch (ApiException ex) { errors.Add($"Ảnh: {ex.Message} (mở lại loại phòng để tải ảnh lần nữa)"); }
             }
         }
         finally { UseWaitCursor = false; }
-        var summary = $"Đã thêm loại phòng {name.Text.Trim()}" + (count > 0 ? $" và {made}/{count} phòng." : ". Chưa có phòng nào – thêm phòng ở tab Sơ đồ phòng để loại này hiện trên web.");
+        var summary = $"Đã thêm loại phòng {name.Text.Trim()}" + (count > 0 ? $" và {made}/{count} phòng." : ". Chưa có phòng nào – thêm phòng ở tab Sơ đồ phòng để loại này hiện trên web.")
+            + (photoFiles.Count > 0 && errors.All(e => !e.StartsWith("Ảnh:")) ? $"\nĐã tải lên {photoFiles.Count} ảnh." : "");
         if (errors.Count > 0) Ui.Error(this, summary + "\n\nKhông tạo được:\n" + string.Join("\n", errors));
         else Ui.Info(this, summary);
     }

@@ -1,9 +1,11 @@
-namespace Quanlychuoikhachsan.Application.Bookings;
+﻿namespace Quanlychuoikhachsan.Application.Bookings;
 
 public interface IBookingService
 {
     Task<IReadOnlyList<RoomSummaryResponse>> FindAvailableRoomsAsync(RoomAvailabilityQuery query, CancellationToken cancellationToken);
     Task<PricePreviewResponse> PreviewPriceAsync(long roomId, DateOnly checkIn, DateOnly checkOut, CancellationToken cancellationToken);
+    /// <summary>Báo giá khi khách chọn một ưu đãi (chính sách giá giảm). promotionId = null → giá không ưu đãi.</summary>
+    Task<PricePreviewResponse> PreviewPriceAsync(long roomId, DateOnly checkIn, DateOnly checkOut, long? promotionId, CancellationToken cancellationToken);
     Task<BookingResponse> CreateBookingAsync(long accountId, CreateBookingRequest request, CancellationToken cancellationToken);
     Task<BookingResponse> UpdateBookingAsync(long accountId, long bookingId, PatchBookingRequest request, CancellationToken cancellationToken);
     Task<BookingResponse> ConfirmDepositAsync(long accountId, long bookingId, ConfirmDepositRequest request, CancellationToken cancellationToken);

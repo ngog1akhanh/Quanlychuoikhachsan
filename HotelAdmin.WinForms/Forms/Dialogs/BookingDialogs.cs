@@ -26,32 +26,32 @@ public static class BookingActions
             case "checkout":
                 using (var dlg = new DlgCheckOut(api, d)) return dlg.ShowDialog(owner) == DialogResult.OK;
             case "cancel":
-            {
-                var hold = d.Summary.Status is "HOLD" or "CHO_COC";
-                var question = hold
-                    ? "Booking chưa cọc sẽ bị hủy ngay và phòng được giải phóng. Lý do hủy:"
-                    : "Booking đã cọc: hệ thống tạo yêu cầu hủy để quản lý duyệt. Lý do hủy:";
-                var reason = Ui.Prompt(owner, $"Hủy booking {d.Summary.BookingCode}", question);
-                if (reason is null) return false;
-                try
                 {
-                    var result = await api.CancelBookingAsync(d.Summary.Id, reason);
-                    Ui.Info(owner, result.Message);
-                    return true;
+                    var hold = d.Summary.Status is "HOLD" or "CHO_COC";
+                    var question = hold
+                        ? "Booking chưa cọc sẽ bị hủy ngay và phòng được giải phóng. Lý do hủy:"
+                        : "Booking đã cọc: hệ thống tạo yêu cầu hủy để quản lý duyệt. Lý do hủy:";
+                    var reason = Ui.Prompt(owner, $"Hủy booking {d.Summary.BookingCode}", question);
+                    if (reason is null) return false;
+                    try
+                    {
+                        var result = await api.CancelBookingAsync(d.Summary.Id, reason);
+                        Ui.Info(owner, result.Message);
+                        return true;
+                    }
+                    catch (ApiException ex) { Ui.Error(owner, ex.Message); return false; }
                 }
-                catch (ApiException ex) { Ui.Error(owner, ex.Message); return false; }
-            }
             case "noshow":
-            {
-                if (!Ui.Confirm(owner, $"Đánh dấu booking {d.Summary.BookingCode} là khách không đến?\nCác đêm từ hôm nay sẽ được giải phóng; tiền cọc xử lý theo chính sách.")) return false;
-                var note = Ui.Prompt(owner, "Ghi chú", "Ghi chú (không bắt buộc):", null, required: false);
-                try
                 {
-                    await api.MarkNoShowAsync(d.Summary.Id, note);
-                    return true;
+                    if (!Ui.Confirm(owner, $"Đánh dấu booking {d.Summary.BookingCode} là khách không đến?\nCác đêm từ hôm nay sẽ được giải phóng; tiền cọc xử lý theo chính sách.")) return false;
+                    var note = Ui.Prompt(owner, "Ghi chú", "Ghi chú (không bắt buộc):", null, required: false);
+                    try
+                    {
+                        await api.MarkNoShowAsync(d.Summary.Id, note);
+                        return true;
+                    }
+                    catch (ApiException ex) { Ui.Error(owner, ex.Message); return false; }
                 }
-                catch (ApiException ex) { Ui.Error(owner, ex.Message); return false; }
-            }
             default:
                 return false;
         }
@@ -112,11 +112,13 @@ public sealed class DlgDeposit : DialogBase
         this.api = api;
         this.booking = booking;
         var remaining = Math.Max(0, booking.Summary.Total - booking.Summary.DepositPaid);
-        amount = Inputs.Number(Math.Min(remaining, SuggestDeposit(booking.Summary.Total)), 0, remaining, 0, 50000);
+        // A1: điền đúng số cọc tối thiểu theo chính sách (API trả về); API cũ không trả thì gợi ý 30%.
+        var minimum = booking.RequiredDeposit > 0 ? Math.Max(0, booking.RequiredDeposit - booking.Summary.DepositPaid) : SuggestDeposit(booking.Summary.Total);
+        amount = Inputs.Number(Math.Min(remaining, Math.Ceiling(minimum)), 0, remaining, 0, 50000);
 
         var grid = new FormGrid(2);
         grid.Add("Phương thức", method);
-        grid.Add("Số tiền cọc (gợi ý 30%)", amount);
+        grid.Add(booking.RequiredDeposit > 0 ? $"Số tiền cọc (tối thiểu {Ui.Money(minimum)})" : "Số tiền cọc (gợi ý 30%)", amount);
         grid.Add("Ghi chú", note, 2);
         Body.Controls.Add(grid);
 

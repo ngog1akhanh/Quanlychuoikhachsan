@@ -40,7 +40,7 @@ public sealed class BillingPage : ModulePage
     // =====================================================================
     private DataView RoomInvoices()
     {
-        var view = new DataView(Session, "Hóa đơn tiền phòng") { Paged = true, Loader = q => Page("v1/app/invoices", q) };
+        var view = new DataView(Session, "Hóa đơn tiền phòng") { HoverPreview = true, Paged = true, Loader = q => Page("v1/app/invoices", q) };
         view.AddSearch("Mã HĐ, mã booking, tên khách, SĐT…")
             .AddStatusFilter(null, "NHAP", "DA_PHAT_HANH", "TT_MOT_PHAN", "DA_THANH_TOAN", "DA_HUY")
             .Columns(
@@ -163,7 +163,7 @@ public sealed class BillingPage : ModulePage
     // =====================================================================
     private DataView ServiceInvoices()
     {
-        var view = new DataView(Session, "Hóa đơn dịch vụ") { Paged = true, Loader = q => Page("v1/app/service-invoices", q) };
+        var view = new DataView(Session, "Hóa đơn dịch vụ") { HoverPreview = true, Paged = true, Loader = q => Page("v1/app/service-invoices", q) };
         view.AddSearch("Mã HĐ, mã booking, tên khách…")
             .AddStatusFilter(null, "DA_PHAT_HANH", "TT_MOT_PHAN", "DA_THANH_TOAN", "DA_HUY")
             .Columns(
@@ -229,7 +229,7 @@ public sealed class BillingPage : ModulePage
     // =====================================================================
     private DataView Deposits()
     {
-        var view = new DataView(Session, "Phiếu cọc") { Paged = true, Loader = q => Page("v1/app/deposits", q) };
+        var view = new DataView(Session, "Phiếu cọc") { HoverPreview = true, Paged = true, Loader = q => Page("v1/app/deposits", q) };
         view.AddSearch("Mã phiếu, mã booking, tên khách…")
             .Columns(
                 Col.Custom("Mã phiếu", e => Short(J.Str(e, "deposit_code")), 85),
@@ -258,7 +258,7 @@ public sealed class BillingPage : ModulePage
     /// </summary>
     private DataView DepositOrders()
     {
-        var view = new DataView(Session, "Đơn cọc QR (khách đặt trên web)") { Paged = true, Loader = q => Page("v1/app/deposit-orders", q) };
+        var view = new DataView(Session, "Đơn cọc QR (khách đặt trên web)") { HoverPreview = true, Paged = true, Loader = q => Page("v1/app/deposit-orders", q) };
         view.AddSearch("Mã booking, tên khách, nội dung CK, mã giao dịch…")
             .AddStatusFilter(null, "PENDING", "PAID", "FAILED", "REFUND_REQUIRED", "REFUNDED")
             .Columns(
@@ -276,7 +276,9 @@ public sealed class BillingPage : ModulePage
             .AddAction("Kiểm tra ngay", r => InquireDepositOrderAsync(r!.Value), "BILLING_PAYMENT_WRITE", primary: true,
                 when: r => J.Str(r, "status") is "PENDING" or "FAILED")
             .AddAction("Giả lập đã thanh toán (demo)", r => SimulateDepositOrderAsync(r!.Value), "BILLING_PAYMENT_WRITE",
-                when: r => J.Str(r, "status") == "PENDING");
+                when: r => J.Str(r, "status") == "PENDING")
+            .AddDetails(r => $"Đơn cọc QR booking {J.Str(r, "booking_code")}",
+                r => [("Mã đơn", J.StrOrNull(r, "order_id"))]);
         return view;
     }
 
@@ -307,9 +309,9 @@ public sealed class BillingPage : ModulePage
 
     private DataView Refunds()
     {
-        var view = new DataView(Session, "Phiếu hoàn tiền") { Paged = true, Loader = q => Page("v1/app/refunds", q) };
+        var view = new DataView(Session, "Phiếu hoàn tiền") { HoverPreview = true, Paged = true, Loader = q => Page("v1/app/refunds", q) };
         view.AddAction("Lập phiếu hoàn cọc", _ => ChooseDepositRefundAsync(), "REFUND_WRITE", needsRow: false);
-        view.AddStatusFilter("CHO_XU_LY", "CHO_XU_LY", "THANH_CONG", "DA_HUY")
+        view.AddStatusFilter(null, "CHO_XU_LY", "THANH_CONG", "DA_HUY")
             .Columns(
                 Col.Custom("Mã phiếu", e => Short(J.Str(e, "refund_code")), 85),
                 Col.Text("Booking", "booking_code", 80),
@@ -319,9 +321,11 @@ public sealed class BillingPage : ModulePage
                 Col.Text("Lý do", "reason", 150),
                 Col.Time("Thời gian", "time", 85),
                 Col.Text("Mã tham chiếu", "reference", 90),
-                Col.Status("Trạng thái", "status", 85))
+                Col.Custom("Trạng thái", e => J.Str(e, "status") == "THANH_CONG" && J.Str(e, "source") == "Tiền cọc" ? "Đã hoàn cọc" : Labels.Style(J.Str(e, "status")).Label, 85))
             .AddAction("Xác nhận đã hoàn", r => ConfirmRefundAsync(r!.Value), "REFUND_CONFIRM", primary: true,
-                when: r => J.Str(r, "status") == "CHO_XU_LY");
+                when: r => J.Str(r, "status") == "CHO_XU_LY")
+            .AddDetails(r => $"Phiếu hoàn tiền booking {J.Str(r, "booking_code")}",
+                r => [("Mã phiếu đầy đủ", J.StrOrNull(r, "refund_code"))]);
         return view;
     }
 
@@ -367,7 +371,7 @@ public sealed class BillingPage : ModulePage
     // =====================================================================
     private DataView Shifts()
     {
-        var view = new DataView(Session, "Ca thu ngân") { Paged = true, Loader = q => Page("v1/app/shifts", q) };
+        var view = new DataView(Session, "Ca thu ngân") { HoverPreview = true, Paged = true, Loader = q => Page("v1/app/shifts", q) };
         view.AddStatusFilter(null, "DANG_MO", "DA_DONG")
             .Columns(
                 Col.Text("Thu ngân", "employee_name", 120),
@@ -405,13 +409,16 @@ public sealed class BillingPage : ModulePage
             new LineCol("method", "Phương thức", LineKind.ReadOnly, 90),
             new LineCol("system", "Hệ thống ghi nhận", LineKind.ReadOnly, 80),
             new LineCol("actual_total", "Thực tế đếm được", LineKind.Number, 80),
-            new LineCol("note", "Ghi chú chênh lệch", LineKind.Text, 120)) { SkipEmptyRows = false };
+            new LineCol("note", "Ghi chú chênh lệch", LineKind.Text, 120))
+        { SkipEmptyRows = false };
         foreach (var methodId in ids)
         {
             var system = totals.GetValueOrDefault(methodId);
             editor.AddRow(new Dictionary<string, object?>
             {
-                ["method"] = allNames.GetValueOrDefault(methodId, $"#{methodId}"), ["system"] = J.Money(system), ["actual_total"] = system
+                ["method"] = allNames.GetValueOrDefault(methodId, $"#{methodId}"),
+                ["system"] = J.Money(system),
+                ["actual_total"] = system
             });
         }
         var dlg = new FormDialog("Đối soát & đóng ca", 680,
@@ -423,7 +430,9 @@ public sealed class BillingPage : ModulePage
             var lines = editor.Lines();
             return lines.Select((l, i) => new Dictionary<string, object?>
             {
-                ["payment_method_id"] = ids[i], ["actual_total"] = l["actual_total"] ?? 0m, ["note"] = l["note"]
+                ["payment_method_id"] = ids[i],
+                ["actual_total"] = l["actual_total"] ?? 0m,
+                ["note"] = l["note"]
             }).ToList();
         });
         dlg.OnSubmit = v => Api.PostJsonAsync($"v1/shifts/{id}:close", new { lines = v["lines"] });

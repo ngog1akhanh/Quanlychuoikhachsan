@@ -8,6 +8,7 @@ public sealed class AppConfig
     public string ApiBaseUrl { get; set; } = "http://localhost:5005/";
     public string HotelName { get; set; } = "Lotus Hotel";
     public int RequestTimeoutSeconds { get; set; } = 20;
+    public string? PhotoFolder { get; set; }
 
     public static AppConfig Load()
     {

@@ -30,6 +30,20 @@ public sealed class RoomService
     private sealed record RoomDetail(long Id, string? Tang, string? LoaiView, string? MoTa, RoomTypeInfo? RoomType);
 
     /// <summary>
+    /// Báo giá một phòng khi khách chọn ưu đãi: GET /v1/public/rooms/{id}/price?...&amp;promotionId=.
+    /// Giá do API tính (cùng công thức khi giữ phòng), web không tự trừ tiền. Trả null khi chạy mock.
+    /// </summary>
+    public async Task<RoomQuote?> QuoteAsync(long roomId, RoomSearchQuery q, long? promotionId, CancellationToken ct = default)
+    {
+        if (_api.UseMock) return null;
+        var url = $"v1/public/rooms/{roomId}/price?checkInDate={q.CheckIn:yyyy-MM-dd}&checkOutDate={q.CheckOut:yyyy-MM-dd}"
+                  + (promotionId is { } id ? $"&promotionId={id}" : "");
+        var quote = await _api.GetAsync<PriceQuote>(url, ct);
+        return new RoomQuote(roomId, quote.Total,
+            quote.Nights?.Select(n => new QuotedNight(n.StayDate, n.FinalPrice)).ToList() ?? []);
+    }
+
+    /// <summary>
     /// GET /v1/public/rooms/availability → danh sách { room, quote }.
     /// Mỗi phòng gọi thêm GET /v1/public/rooms/{id} để lấy tầng, view, diện tích, mô tả.
     /// Giá 1 đêm hiển thị = tổng tiền báo giá / số đêm (đã gồm chính sách giá và phụ thu).

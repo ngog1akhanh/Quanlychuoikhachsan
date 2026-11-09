@@ -106,6 +106,10 @@ public static class Labels
         ["GIAM_%"] = ("Giảm %", Tone.Neutral),
         ["TANG_TIEN"] = ("Tăng tiền", Tone.Neutral),
         ["GIAM_TIEN"] = ("Giảm tiền", Tone.Neutral),
+        //Ưu đai / sự kiện
+        ["CHINH_SACH"] = ("Chính sách", Tone.Info),
+        ["UU_DAI"] = ("Ưu đãi", Tone.Lime),
+        ["SU_KIEN"] = ("Sự kiện", Tone.Warning),
     };
 
     public static string Of(string? code)

@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 
 namespace Quanlychuoikhachsan.Application.Bookings;
 
@@ -39,7 +39,9 @@ public sealed record CreateBookingRequest(
     string? SpecialRequest = null,
     [param: System.ComponentModel.DataAnnotations.StringLength(120)] string? ContactName = null,
     [param: System.ComponentModel.DataAnnotations.Phone, System.ComponentModel.DataAnnotations.StringLength(20)] string? ContactPhone = null,
-    [param: System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(150)] string? ContactEmail = null);
+        [param: System.ComponentModel.DataAnnotations.EmailAddress, System.ComponentModel.DataAnnotations.StringLength(150)] string? ContactEmail = null,
+    // Ưu đãi khách chọn (id chinh_sach_gia giảm giá). Mỗi booking tối đa 1 ưu đãi.
+    long? PromotionId = null);
 
 public sealed record PatchBookingRequest(string? SpecialRequest);
 
@@ -52,7 +54,9 @@ public sealed record BookingResponse(
     DateTime CheckOut,
     decimal TotalRoomAmount,
     DateTime? HoldExpiresAt,
-    IReadOnlyList<NightPriceResponse> Nights);
+    IReadOnlyList<NightPriceResponse> Nights,
+    // Số tiền cọc theo chính sách cọc của booking (cùng số với QR cọc và hộp "Xác nhận cọc" bên admin).
+    decimal RequiredDeposit = 0);
 
 public sealed record ConfirmDepositRequest(
     long PaymentMethodId,

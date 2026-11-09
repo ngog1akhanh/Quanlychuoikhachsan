@@ -23,7 +23,7 @@ public sealed record AmenityRequest([param: Required, StringLength(30)] string C
     [param: StringLength(255)] string? Icon, [param: StringLength(500)] string? Description);
 
 [ApiController, Authorize, Route("v1")]
-public sealed class HotelCatalogController(HotelDbContext db, IBookingService bookings, IRoomAdminService rooms) : ControllerBase
+public sealed class HotelCatalogController(HotelDbContext db, IBookingService bookings, IRoomAdminService rooms, RoomPhotoStorage photos) : ControllerBase
 {
     [AllowAnonymous, HttpGet("hotels")]
     public async Task<IActionResult> Hotels(CancellationToken ct) => Ok(await db.Set<KhachSan>().AsNoTracking().Where(x => x.TrangThai == "HOAT_DONG").ToListAsync(ct));
@@ -52,13 +52,24 @@ public sealed class HotelCatalogController(HotelDbContext db, IBookingService bo
     {
         var x = await db.Phongs.AsNoTracking().Include(x => x.LoaiPhong).SingleOrDefaultAsync(x => x.Id == id && x.TrangThai != "NGUNG_SU_DUNG" && x.LoaiPhong.TrangThai == "HOAT_DONG", ct) ?? throw new ResourceNotFoundException("Room was not found.");
         var amenities = await (from link in db.Set<LoaiPhongTienNghi>() join a in db.Set<TienNghi>() on link.TienNghiId equals a.Id where link.LoaiPhongId == x.LoaiPhongId && a.TrangThai == "HOAT_DONG" select a).ToListAsync(ct);
-        return Ok(new { x.Id, x.SoPhong, x.Tang, x.HuongPhong, x.LoaiView, x.ViTri, x.MoTa, x.PhuThuDemMacDinh,
-            RoomType = new { x.LoaiPhong.Id, x.LoaiPhong.TenLoaiPhong, x.LoaiPhong.SoNguoiLonToiDa, x.LoaiPhong.SoTreEmToiDa, x.LoaiPhong.DienTichM2, x.LoaiPhong.GiaCoBanDem, x.LoaiPhong.MoTa }, Amenities = amenities,
+        return Ok(new
+        {
+            x.Id,
+            x.SoPhong,
+            x.Tang,
+            x.HuongPhong,
+            x.LoaiView,
+            x.ViTri,
+            x.MoTa,
+            x.PhuThuDemMacDinh,
+            RoomType = new { x.LoaiPhong.Id, x.LoaiPhong.TenLoaiPhong, x.LoaiPhong.SoNguoiLonToiDa, x.LoaiPhong.SoTreEmToiDa, x.LoaiPhong.DienTichM2, x.LoaiPhong.GiaCoBanDem, x.LoaiPhong.MoTa },
+            Amenities = amenities,
             Images = await db.Set<HinhAnhPhong>().Where(i => i.PhongId == id).OrderBy(i => i.ThuTu).ToListAsync(ct),
-            TypeImages = await db.Set<HinhAnhLoaiPhong>().Where(i => i.LoaiPhongId == x.LoaiPhongId).OrderBy(i => i.ThuTu).ToListAsync(ct) });
+            TypeImages = await db.Set<HinhAnhLoaiPhong>().Where(i => i.LoaiPhongId == x.LoaiPhongId).OrderBy(i => i.ThuTu).ToListAsync(ct)
+        });
     }
     [AllowAnonymous, HttpGet("public/rooms/{id:long}/price")]
-    public async Task<IActionResult> Price(long id, DateOnly checkInDate, DateOnly checkOutDate, CancellationToken ct) => Ok(await bookings.PreviewPriceAsync(id, checkInDate, checkOutDate, ct));
+    public async Task<IActionResult> Price(long id, DateOnly checkInDate, DateOnly checkOutDate, long? promotionId, CancellationToken ct) => Ok(await bookings.PreviewPriceAsync(id, checkInDate, checkOutDate, promotionId, ct));
     [AllowAnonymous, HttpGet("public/room-types")]
     public async Task<IActionResult> Types(CancellationToken ct) => Ok(await db.LoaiPhongs.AsNoTracking().Where(x => x.TrangThai == "HOAT_DONG").Select(x => new { x.Id, x.MaLoaiPhong, x.TenLoaiPhong, x.SoNguoiLonToiDa, x.SoTreEmToiDa, x.DienTichM2, x.GiaCoBanDem, x.MoTa }).ToListAsync(ct));
     [HttpPut("rooms/{id:long}"), RequirePermission("ROOM_WRITE")]
@@ -115,5 +126,5 @@ public sealed class HotelCatalogController(HotelDbContext db, IBookingService bo
     [HttpDelete("rooms/{id:long}/images/{imageId:long}"), RequirePermission("ROOM_WRITE")]
     public async Task<IActionResult> DeleteRoomImage(long id, long imageId, CancellationToken ct) { var x = await db.Set<HinhAnhPhong>().SingleOrDefaultAsync(x => x.Id == imageId && x.PhongId == id, ct) ?? throw new ResourceNotFoundException("Image was not found."); db.Remove(x); await db.SaveChangesAsync(ct); return NoContent(); }
     [HttpDelete("room-types/{id:long}/images/{imageId:long}"), RequirePermission("ROOM_TYPE_WRITE")]
-    public async Task<IActionResult> DeleteTypeImage(long id, long imageId, CancellationToken ct) { var x = await db.Set<HinhAnhLoaiPhong>().SingleOrDefaultAsync(x => x.Id == imageId && x.LoaiPhongId == id, ct) ?? throw new ResourceNotFoundException("Image was not found."); db.Remove(x); await db.SaveChangesAsync(ct); return NoContent(); }
+    public async Task<IActionResult> DeleteTypeImage(long id, long imageId, CancellationToken ct) { var x = await db.Set<HinhAnhLoaiPhong>().SingleOrDefaultAsync(x => x.Id == imageId && x.LoaiPhongId == id, ct) ?? throw new ResourceNotFoundException("Image was not found."); db.Remove(x); await db.SaveChangesAsync(ct); photos.TryDelete(x.Url); return NoContent(); }
 }

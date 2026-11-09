@@ -85,7 +85,10 @@ public sealed partial class BookingService
         await using var tx = await BookingTransaction.BeginAsync(dbContext, ct);
         await LockBookingAsync(id, ct); var booking = await LoadBookingForBillingAsync(id, ct);
         if (booking.TrangThai is not ("HOLD" or "BOOKED" or "DANG_O")) throw new InvalidArgumentException("Booking cannot be rescheduled.");
-        if (await dbContext.Set<DepositPaymentOrder>().AnyAsync(x => x.BookingId == id && x.Status == "PENDING", ct)) throw new InvalidArgumentException("Reconcile the pending deposit payment before changing dates.");
+        var pendingQr = await dbContext.Set<DepositPaymentOrder>().SingleOrDefaultAsync(x => x.BookingId == id && x.Status == "PENDING", ct);
+        if (pendingQr is not null && !IsVietQrDemo) throw new InvalidArgumentException("Khách đang có mã QR cọc chờ thanh toán. Hãy đối soát VietQR trước khi đổi ngày.");
+        // Demo: đổi ngày làm thay đổi tiền cọc → hủy QR cũ, khách tạo lại QR mới với số tiền mới.
+        if (pendingQr is not null) pendingQr.Status = "FAILED";
         if (booking.TrangThai == "DANG_O" && checkIn.ToUniversalTime() != booking.DuKienNhan) throw new InvalidArgumentException("Arrival cannot change after check-in.");
         if (booking.TrangThai != "DANG_O" && checkIn < DateTime.UtcNow) throw new InvalidArgumentException("Arrival cannot be in the past.");
         if (await dbContext.HoaDonPhongs.AnyAsync(x => x.DatPhongId == id && x.TrangThai != "NHAP" && x.TrangThai != "DA_HUY", ct)) throw new InvalidArgumentException("Void the issued invoice before changing stay dates.");
@@ -94,13 +97,14 @@ public sealed partial class BookingService
         if (booking.TrangThai == "HOLD" && (locks.Count == 0 || locks.Any(x => x.HetHanGiuCho <= DateTime.UtcNow))) throw new InvalidArgumentException("Booking hold has expired.");
         var expiry = locks.Select(x => x.HetHanGiuCho).FirstOrDefault(x => x.HasValue);
         dbContext.KhoaLichPhongs.RemoveRange(locks.Where(x => x.NgayLuuTru < from || x.NgayLuuTru >= to));
+        var promotionId = await BookingPromotionAsync(detailIds, ct);
         var oldPrices = await dbContext.GiaDemDatPhongs.Where(x => detailIds.Contains(x.ChiTietDatPhongId)).ToListAsync(ct);
         dbContext.GiaDemDatPhongs.RemoveRange(oldPrices.Where(x => x.NgayLuuTru < from || x.NgayLuuTru >= to));
         foreach (var detail in booking.ChiTietDatPhongs)
         {
             var room = await dbContext.Phongs.Include(x => x.LoaiPhong).SingleAsync(x => x.Id == detail.PhongId, ct);
             if (room.TrangThai is "BAO_TRI" or "NGUNG_SU_DUNG") throw new InvalidArgumentException("Room is not available.");
-            var newPrices = await CalculateNightsAsync(room, from, to, ct);
+            var newPrices = await CalculateNightsAsync(room, from, to, ct, promotionId);
             foreach (var price in newPrices)
             {
                 if (!locks.Any(x => x.ChiTietDatPhongId == detail.Id && x.NgayLuuTru == price.StayDate))
@@ -126,10 +130,11 @@ public sealed partial class BookingService
         if (room.TrangThai is "BAO_TRI" or "NGUNG_SU_DUNG" || (booking.TrangThai == "DANG_O" && room.TrangThai != "SAN_SANG") || room.LoaiPhong.SoNguoiLonToiDa < detail.SoNguoiLon || room.LoaiPhong.SoTreEmToiDa < detail.SoTreEm) throw new InvalidArgumentException("New room is unavailable or too small.");
         var from = HotelTime.StayDate(booking.TrangThai == "DANG_O" ? DateTime.UtcNow : booking.DuKienNhan); var to = HotelTime.StayDate(booking.DuKienTra);
         if (from >= to) throw new InvalidArgumentException("No remaining nights to move.");
+        var promotionId = await BookingPromotionAsync([detailId], ct);
         var locks = await dbContext.KhoaLichPhongs.Where(x => x.ChiTietDatPhongId == detailId && x.NgayLuuTru >= from).ToListAsync(ct); dbContext.RemoveRange(locks);
         var prices = await dbContext.GiaDemDatPhongs.Where(x => x.ChiTietDatPhongId == detailId && x.NgayLuuTru >= from).ToListAsync(ct); dbContext.RemoveRange(prices);
         await dbContext.SaveChangesAsync(ct);
-        foreach (var price in await CalculateNightsAsync(room, from, to, ct))
+        foreach (var price in await CalculateNightsAsync(room, from, to, ct, promotionId))
         {
             dbContext.Add(ToNight(detailId, price));
             dbContext.Add(new KhoaLichPhong { ChiTietDatPhongId = detailId, PhongId = room.Id, NgayLuuTru = price.StayDate, TrangThai = booking.TrangThai == "DANG_O" ? "OCCUPIED" : "BOOKED", CreatedAt = DateTime.UtcNow });
