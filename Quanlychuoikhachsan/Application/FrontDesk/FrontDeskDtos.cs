@@ -13,7 +13,8 @@ public sealed record FrontDeskBookingQuery(
     DateOnly? From = null,
     DateOnly? To = null,
     int Page = 1,
-    int PageSize = 50);
+    int PageSize = 50,
+    bool ArrivalDescending = true);
 
 public sealed record FrontDeskBookingItem(
     long Id,

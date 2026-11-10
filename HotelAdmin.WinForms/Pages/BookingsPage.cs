@@ -32,6 +32,8 @@ public sealed class BookingsPage : PageBase
     private readonly BookingDetailView detail;
     private List<FrontDeskBookingItem> rows = [];
     private int page = 1;
+    private bool arrivalDescending = true;
+    private bool changingOrder;
     private int total;
     private long? selectedId;
 
@@ -114,11 +116,29 @@ public sealed class BookingsPage : PageBase
         foreach (Control c in filters.Controls) c.Margin = new Padding(0, c is Label ? 12 : 4, 8, 0);
 
         grid.AutoGenerateColumns = false;
-        grid.AddText("code", "Mã", 90);
+        grid.AddText("code", "Mã", 120).MinimumWidth = 135;
         grid.AddText("guest", "Khách", 120).DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         grid.AddText("rooms", "Phòng", 60);
-        grid.AddText("in", "Nhận", 70);
-        grid.AddText("out", "Trả", 70);
+        grid.AddText("in", "Nhận", 105, "dd/MM/yyyy\nHH:mm").MinimumWidth = 105;
+        grid.Columns["in"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        grid.Columns["in"]!.SortMode = DataGridViewColumnSortMode.Programmatic;
+        grid.Columns["in"]!.HeaderCell.SortGlyphDirection = SortOrder.Descending;
+        grid.Columns["in"]!.HeaderCell.ToolTipText = "Bấm để đảo thứ tự ngày nhận phòng";
+        grid.ColumnHeaderMouseClick += async (_, e) =>
+        {
+            if (e.ColumnIndex != grid.Columns["in"]!.Index || changingOrder) return;
+            changingOrder = true;
+            try
+            {
+                arrivalDescending = !arrivalDescending;
+                page = 1;
+                grid.Columns["in"]!.HeaderCell.SortGlyphDirection = arrivalDescending ? SortOrder.Descending : SortOrder.Ascending;
+                await ReloadSafeAsync();
+            }
+            finally { changingOrder = false; }
+        };
+        grid.AddText("out", "Trả", 105, "dd/MM/yyyy\nHH:mm").MinimumWidth = 105;
+        grid.Columns["out"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         grid.AddText("total", "Tổng tiền", 80, "#,0", DataGridViewContentAlignment.MiddleRight);
         grid.AddText("channel", "Kênh", 60);
         grid.AddStatus("status", "Trạng thái", v => StatusStyles.ForBooking(v as string), 95);
@@ -205,7 +225,7 @@ public sealed class BookingsPage : PageBase
         var st = status.SelectedItem is Choice<string?> c ? c.Value : null;
         DateOnly? fromD = fromDate.Checked ? DateOnly.FromDateTime(fromDate.Value) : null;
         DateOnly? toD = toDate.Checked ? DateOnly.FromDateTime(toDate.Value) : null;
-        var result = await Api.SearchBookingsAsync(search.Text, st, fromD, toD, page, PageSize);
+        var result = await Api.SearchBookingsAsync(search.Text, st, fromD, toD, page, PageSize, arrivalDescending: arrivalDescending);
         rows = result.Items;
         total = result.Total;
         var pages = Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
@@ -215,8 +235,8 @@ public sealed class BookingsPage : PageBase
         grid.Rows.Clear();
         foreach (var b in rows)
         {
-            var added = grid.Rows.Add(b.BookingCode, $"{b.CustomerName}\n{b.CustomerPhone}".Trim(), b.Rooms, b.CheckIn.ToString("dd/MM HH:mm"),
-                b.CheckOut.ToString("dd/MM HH:mm"), b.Total, BookingDetailView.ChannelText(b.Channel), b.Status);
+            var added = grid.Rows.Add(b.BookingCode, $"{b.CustomerName}\n{b.CustomerPhone}".Trim(), b.Rooms, b.CheckIn,
+                b.CheckOut, b.Total, BookingDetailView.ChannelText(b.Channel), b.Status);
             // Lia chuột vào dòng: khung xem nhanh thông tin booking.
             var tip = PreviewText(b);
             foreach (DataGridViewCell cell in grid.Rows[added].Cells) cell.ToolTipText = tip;

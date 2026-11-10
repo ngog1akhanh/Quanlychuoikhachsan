@@ -327,6 +327,10 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
             booking.ChinhSachHuyId = await dbContext.Set<ChinhSachHuy>().Where(x => x.TrangThai == "HOAT_DONG").OrderByDescending(x => x.Id).Select(x => (long?)x.Id).FirstOrDefaultAsync(cancellationToken);
             await dbContext.SaveChangesAsync(cancellationToken);
 
+            // The database allocates the ID atomically, including concurrent bookings.
+            // D4 pads short IDs without truncating IDs above 9999.
+            booking.MaDatPhong = "DP-" + booking.Id.ToString("D4", System.Globalization.CultureInfo.InvariantCulture);
+
             var details = new List<(ChiTietDatPhong Detail, IReadOnlyList<NightPriceResponse> Prices)>();
             var adultsLeft = request.Adults; var childrenLeft = request.Children;
             foreach (var room in rooms)

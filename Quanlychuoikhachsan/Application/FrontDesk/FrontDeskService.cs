@@ -40,7 +40,10 @@ public sealed partial class FrontDeskService(HotelDbContext db, BookingService b
         }
 
         var total = await q.CountAsync(ct);
-        var paged = q.OrderByDescending(x => x.DuKienNhan).ThenByDescending(x => x.Id).Skip((page - 1) * size).Take(size);
+        var ordered = query.ArrivalDescending
+            ? q.OrderByDescending(x => x.DuKienNhan).ThenByDescending(x => x.Id)
+            : q.OrderBy(x => x.DuKienNhan).ThenBy(x => x.Id);
+        var paged = ordered.Skip((page - 1) * size).Take(size);
         var items = await ProjectAsync(paged, ct);
         return new FrontDeskBookingPage(items, total, page, size);
     }
