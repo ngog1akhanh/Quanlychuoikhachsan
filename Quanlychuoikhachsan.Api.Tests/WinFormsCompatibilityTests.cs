@@ -22,7 +22,7 @@ public sealed class WinFormsCompatibilityTests
         var db = scope.ServiceProvider.GetRequiredService<HotelDbContext>();
         db.Add(new VaiTro { Id = 2, MaVaiTro = "RECEPTIONIST", TenVaiTro = "Reception", TrangThai = "HOAT_DONG" });
         long id = 100;
-        foreach (var code in new[] { "BOOKING_READ", "BOOKING_WRITE", "ROOM_READ", "ROOM_WRITE", "ROOM_TYPE_READ", "ROOM_TYPE_WRITE", "BILLING_READ", "BILLING_WRITE", "BILLING_PAYMENT_WRITE", "CANCELLATION_APPROVE" })
+        foreach (var code in new[] { "BOOKING_READ", "BOOKING_WRITE", "ROOM_READ", "ROOM_WRITE", "ROOM_TYPE_READ", "ROOM_TYPE_WRITE", "BILLING_READ", "BILLING_WRITE", "BILLING_PAYMENT_WRITE", "CANCELLATION_APPROVE", "REFUND_CONFIRM" })
         {
             db.Add(new Quyen { Id = id, MaQuyen = code, TenQuyen = code });
             db.Add(new VaiTroQuyen { VaiTroId = 2, QuyenId = id++ });
@@ -154,9 +154,16 @@ public sealed class WinFormsCompatibilityTests
         var finalDb = finalScope.ServiceProvider.GetRequiredService<HotelDbContext>();
         var refund = Assert.Single(await finalDb.Set<PhieuHoanTien>().ToListAsync());
         Assert.Equal(60, refund.SoTien);
-        Assert.Equal("THANH_CONG", refund.TrangThai); // hủy được duyệt => phiếu hoàn lưu ở trạng thái đã hoàn cọc
+        // Duyệt hủy chỉ đồng ý hoàn: phiếu chờ thu ngân chi tiền rồi xác nhận.
+        Assert.Equal("CHO_XU_LY", refund.TrangThai);
         Assert.Equal(request.Id, refund.YeuCauHuyId);
         Assert.Empty(await finalDb.KhoaLichPhongs.ToListAsync());
+        var confirmed = await http.PostAsJsonAsync($"v1/refunds/{refund.Id}:confirm", new { reference = "REFUND-60" });
+        Assert.True(confirmed.IsSuccessStatusCode, await confirmed.Content.ReadAsStringAsync());
+        await using var confirmScope = f.Services.CreateAsyncScope();
+        var paidOut = await confirmScope.ServiceProvider.GetRequiredService<HotelDbContext>().Set<PhieuHoanTien>().SingleAsync();
+        Assert.Equal("THANH_CONG", paidOut.TrangThai);
+        Assert.Equal("REFUND-60", paidOut.MaGiaoDich);
     }
 
     [Fact]

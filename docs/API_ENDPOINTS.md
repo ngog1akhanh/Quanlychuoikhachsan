@@ -290,6 +290,7 @@ Cột quyền thể hiện yêu cầu khai báo ở controller. Các API JWT t�
 | GET | `/v1/reports/bookings` | REPORT_READ |
 | GET | `/v1/reports/customers` | REPORT_READ |
 | GET | `/v1/reports/inventory` | REPORT_READ |
+| GET | `/v1/reports/purchases` | REPORT_READ |
 | GET | `/v1/reports/operations` | REPORT_READ |
 | GET | `/v1/reports/revenue-breakdown` | REPORT_READ |
 | GET | `/v1/reports/services` | REPORT_READ |

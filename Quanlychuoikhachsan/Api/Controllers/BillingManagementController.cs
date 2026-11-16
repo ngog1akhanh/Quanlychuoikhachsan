@@ -33,11 +33,22 @@ public sealed class BillingManagementController(HotelDbContext db, CurrentActor 
     public async Task<IActionResult> Print(long id, CancellationToken ct)
     {
         var x = await db.HoaDonPhongs.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException("Invoice was not found."); await actor.BookingAsync(x.DatPhongId, "BILLING_READ", ct);
-        var lines = await db.ChiTietHoaDonPhongs.AsNoTracking().Where(l => l.HoaDonPhongId == id).ToListAsync(ct); var summary = await bookings.InvoiceResponseAsync(x, ct);
-        var html = new StringBuilder("<!doctype html><html lang='vi'><meta charset='utf-8'><title>Hóa đơn khách sạn</title><style>body{font:16px sans-serif;max-width:900px;margin:40px auto}table{width:100%;border-collapse:collapse}td,th{border-bottom:1px solid #ddd;padding:12px;text-align:left}</style><h1>Hóa đơn tiền phòng</h1>");
-        html.Append($"<p>{WebUtility.HtmlEncode(x.MaHoaDon)} · {WebUtility.HtmlEncode(x.TrangThai)}</p><table><tr><th>Nội dung</th><th>Số lượng</th><th>Đơn giá</th><th>Thành tiền</th></tr>");
-        foreach (var l in lines) html.Append($"<tr><td>{WebUtility.HtmlEncode(l.NoiDung)}</td><td>{l.SoLuong:N2}</td><td>{l.DonGia:N2}</td><td>{l.ThanhTien:N2}</td></tr>");
-        html.Append($"</table><p>Tổng: {summary.Total:N2} VND</p><p>Cọc áp dụng: {summary.DepositApplied:N2} VND</p><p>Đã thanh toán: {summary.Paid:N2} VND</p><p>Còn phải thu: {summary.Due:N2} VND</p></html>");
+        var lines = await db.ChiTietHoaDonPhongs.AsNoTracking().Where(l => l.HoaDonPhongId == id).OrderBy(l => l.Id).ToListAsync(ct); var summary = await bookings.InvoiceResponseAsync(x, ct);
+        var booking = await db.DatPhongs.AsNoTracking().Where(b => b.Id == x.DatPhongId)
+            .Select(b => new { b.MaDatPhong, Name = b.ContactName ?? b.KhachHang.HoTen, Phone = b.ContactPhone ?? b.KhachHang.SoDienThoai, b.DuKienNhan, b.DuKienTra }).SingleAsync(ct);
+        var vi = System.Globalization.CultureInfo.GetCultureInfo("vi-VN");
+        string Money(decimal v) => v.ToString("#,0", vi) + " đ";
+        string E(string? v) => WebUtility.HtmlEncode(v ?? "");
+        var status = x.TrangThai switch { "NHAP" => "Nháp (chưa phát hành)", "DA_PHAT_HANH" => "Đã phát hành", "TT_MOT_PHAN" => "Thanh toán một phần", "DA_THANH_TOAN" => "Đã thanh toán", "DA_HUY" => "Đã hủy", var o => o };
+        var html = new StringBuilder("<!doctype html><html lang='vi'><meta charset='utf-8'><title>Hóa đơn tiền phòng</title><style>body{font:15px sans-serif;max-width:860px;margin:40px auto;color:#222}h1{margin-bottom:4px}.meta{color:#555;margin:2px 0}table{width:100%;border-collapse:collapse;margin-top:16px}td,th{border-bottom:1px solid #ddd;padding:10px;text-align:left}td.n,th.n{text-align:right}.sum{margin-top:16px;width:340px;margin-left:auto}.sum div{display:flex;justify-content:space-between;padding:4px 0}.sum .due{font-weight:700;border-top:2px solid #222;margin-top:6px;padding-top:8px}@media print{body{margin:0}}</style>");
+        html.Append($"<h1>Hóa đơn tiền phòng</h1><p class='meta'>Số hóa đơn: {E(x.MaHoaDon)} · Trạng thái: {E(status)}</p>");
+        html.Append($"<p class='meta'>Ngày lập: {HotelTime.Local(x.NgayLap):dd/MM/yyyy HH:mm} · Booking: {E(booking.MaDatPhong)}</p>");
+        html.Append($"<p class='meta'>Khách hàng: {E(booking.Name)}{(string.IsNullOrWhiteSpace(booking.Phone) ? "" : " · " + E(booking.Phone))} · Lưu trú: {HotelTime.Local(booking.DuKienNhan):dd/MM/yyyy} → {HotelTime.Local(booking.DuKienTra):dd/MM/yyyy}</p>");
+        if (x.TrangThai == "DA_HUY" && !string.IsNullOrWhiteSpace(x.LyDoHuy)) html.Append($"<p class='meta'>Lý do hủy: {E(x.LyDoHuy)}</p>");
+        html.Append("<table><tr><th>Nội dung</th><th class='n'>SL</th><th class='n'>Đơn giá</th><th class='n'>Thành tiền</th></tr>");
+        foreach (var l in lines) html.Append($"<tr><td>{E(l.NoiDung)}</td><td class='n'>{l.SoLuong.ToString("0.##", vi)}</td><td class='n'>{Money(l.DonGia)}</td><td class='n'>{Money(l.ThanhTien)}</td></tr>");
+        html.Append($"</table><div class='sum'><div><span>Tổng cộng</span><b>{Money(summary.Total)}</b></div><div><span>Tiền cọc đã trừ</span><span>− {Money(summary.DepositApplied)}</span></div>");
+        html.Append($"<div><span>Đã thanh toán</span><span>− {Money(summary.Paid)}</span></div><div class='due'><span>Còn phải thu</span><span>{Money(summary.Due)}</span></div></div></html>");
         return Content(html.ToString(), "text/html; charset=utf-8");
     }
     [HttpPost("invoices/{id:long}:send"), RequirePermission("BILLING_WRITE")]
@@ -55,7 +66,11 @@ public sealed class BillingManagementController(HotelDbContext db, CurrentActor 
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         if (db.Database.IsRelational()) await db.HoaDonPhongs.FromSqlInterpolated($"SELECT * FROM hoa_don_phong WHERE id = {id} FOR UPDATE").ToListAsync(ct);
         var x = await db.HoaDonPhongs.SingleOrDefaultAsync(x => x.Id == id, ct) ?? throw new ResourceNotFoundException("Invoice was not found.");
-        if (x.TrangThai == "DA_HUY") throw new InvalidArgumentException("Invoice is already voided.");
+        if (x.TrangThai == "DA_HUY") throw new InvalidArgumentException("Hóa đơn đã bị hủy trước đó.");
+        // Hóa đơn thay thế chỉ lập được khi khách còn đang ở (invoice:prepare yêu cầu DANG_O).
+        // Hủy sau khi trả phòng sẽ làm booking mất hóa đơn và mất doanh thu → chặn; thu thừa thì lập phiếu hoàn cho khoản thu.
+        if (await db.DatPhongs.AnyAsync(b => b.Id == x.DatPhongId && b.TrangThai == "DA_TRA", ct))
+            throw new InvalidArgumentException("Booking đã trả phòng nên không hủy được hóa đơn (không lập lại được hóa đơn thay thế). Nếu thu thừa, hãy lập phiếu hoàn cho khoản thu.");
         if (await db.YeuCauThanhToanVietQrs.AnyAsync(p => p.HoaDonPhongId == id && p.TrangThai != "PAID" && p.TrangThai != "REFUNDED", ct)) throw new InvalidArgumentException("Resolve outstanding VietQR orders before voiding.");
         x.TrangThai = "DA_HUY"; x.LyDoHuy = r.Reason; await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return NoContent();
     }
@@ -117,6 +132,8 @@ public sealed class BillingManagementController(HotelDbContext db, CurrentActor 
         // This endpoint records a refund already performed by the cashier.
         if (r.PaymentMethodId.HasValue) x.PhuongThucId = r.PaymentMethodId.Value;
         var method = await db.PhuongThucThanhToans.SingleOrDefaultAsync(m => m.Id == x.PhuongThucId && m.TrangThai == "HOAT_DONG", ct) ?? throw new ResourceNotFoundException("Active refund method was not found.");
+        if (string.Equals(method.MaPhuongThuc, "VIETQR", StringComparison.OrdinalIgnoreCase))
+            throw new InvalidArgumentException("Không hoàn tiền qua VietQR được. Hãy chọn phương thức thực tế đã dùng để trả khách (Chuyển khoản / Tiền mặt).");
         Input.OneOf(method.MaPhuongThuc, "TIEN_MAT", "CHUYEN_KHOAN", "THE", "CASH", "BANK_TRANSFER", "CARD");
         if (await db.Set<PhieuHoanTien>().AnyAsync(p => p.Id != id && p.MaGiaoDich == r.Reference && p.PhuongThucId == x.PhuongThucId, ct)) throw new AlreadyExistsException("Refund reference was already used.");
         x.TrangThai = "THANH_CONG"; x.MaGiaoDich = r.Reference; x.ThoiGianHoan = DateTime.UtcNow; x.NhanVienId = await actor.EmployeeIdAsync(ct);

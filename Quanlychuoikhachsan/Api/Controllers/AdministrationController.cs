@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore;
 using Quanlychuoikhachsan.Application.Accounts;
 using Quanlychuoikhachsan.Application.Common;
 using Quanlychuoikhachsan.Domain.Entities;
+using Quanlychuoikhachsan.Infrastructure.Auditing;
 using Quanlychuoikhachsan.Infrastructure.Authentication;
 using Quanlychuoikhachsan.Infrastructure.Persistence;
 
@@ -130,5 +131,30 @@ public sealed class AdministrationController(HotelDbContext db, CurrentActor act
         db.TaiKhoanVaiTros.AddRange(ids.Select(p => new TaiKhoanVaiTro { TaiKhoanId = id, VaiTroId = p })); await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); return NoContent();
     }
     [HttpGet("audit-logs"), RequirePermission("AUDIT_READ")]
-    public async Task<IActionResult> Audit([FromQuery] ListQuery q, long? accountId, CancellationToken ct) => Ok(await db.NhatKyHeThongs.AsNoTracking().Where(x => (!accountId.HasValue || x.TaiKhoanId == accountId) && (q.Search == null || x.DoiTuong == q.Search)).OrderByDescending(x => x.Id).PageAsync(q, ct));
+    public async Task<IActionResult> Audit([FromQuery] ListQuery q, long? accountId, string? action, bool includeSystem, CancellationToken ct)
+    {
+        var query = db.NhatKyHeThongs.AsNoTracking().Where(x => !accountId.HasValue || x.TaiKhoanId == accountId);
+        // Mặc định ẩn bảng kỹ thuật (khóa lịch, giá từng đêm, thông báo…) – dữ liệu cũ trước khi sửa interceptor vẫn còn các dòng này.
+        if (!includeSystem)
+        {
+            var hidden = AuditPresenter.SystemTables.ToList();
+            query = query.Where(x => x.DoiTuong == null || !hidden.Contains(x.DoiTuong));
+        }
+        if (!string.IsNullOrWhiteSpace(action)) query = query.Where(x => x.HanhDong == action);
+        if (!string.IsNullOrWhiteSpace(q.Search))
+        {
+            // Tìm theo tên bảng hoặc nhãn tiếng Việt ("hóa đơn", "dat_phong"…).
+            var tables = AuditPresenter.TablesMatching(q.Search.Trim());
+            query = query.Where(x => x.DoiTuong != null && tables.Contains(x.DoiTuong));
+        }
+        var page = await query.OrderByDescending(x => x.Id).PageAsync(q, ct);
+        var accountIds = page.Items.Where(x => x.TaiKhoanId.HasValue).Select(x => x.TaiKhoanId!.Value).Distinct().ToList();
+        var accounts = await db.TaiKhoans.AsNoTracking().Where(x => accountIds.Contains(x.Id))
+            .Select(x => new { x.Id, Staff = x.NhanVien != null ? x.NhanVien.HoTen : null, Customer = x.KhachHang != null ? x.KhachHang.HoTen : null, x.Email, x.SoDienThoai })
+            .ToListAsync(ct);
+        var names = accounts.ToDictionary(x => x.Id, x => x.Staff ?? (x.Customer is null ? null : x.Customer + " (khách)") ?? x.Email ?? x.SoDienThoai ?? $"Tài khoản #{x.Id}");
+        return Ok(new ResultPage<AuditLogView>(
+            page.Items.Select(x => AuditPresenter.Describe(x, x.TaiKhoanId is { } id ? names.GetValueOrDefault(id, $"Tài khoản #{id}") : "Hệ thống")).ToList(),
+            page.Total, page.Page, page.PageSize));
+    }
 }

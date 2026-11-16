@@ -88,4 +88,16 @@ public sealed class CorrectionWorkflowTests
         Assert.Equal(110, second.Total); Assert.NotEqual(first.Id, second.Id);
         Assert.Equal(second.Id, (await s.Db.HoaDonPhongs.SingleAsync(x => x.Id == first.Id)).HoaDonThayTheId);
     }
+
+    [Fact]
+    public async Task Room_invoice_cannot_be_voided_after_checkout()
+    {
+        await using var s = new TestStore(); await s.SeedAsync(); await s.SeedStayAsync("BOOKED");
+        await s.Bookings.CheckInAsync(1, new(1), default);
+        var invoice = await s.Bookings.PrepareInvoiceAsync(1, new(1, 0, 0), default);
+        (await s.Db.DatPhongs.SingleAsync(x => x.Id == 1)).TrangThai = "DA_TRA"; await s.Db.SaveChangesAsync();
+        var billing = new BillingManagementController(s.Db, s.Actor, s.Bookings, new NotificationWriter(s.Db));
+        await Assert.ThrowsAsync<InvalidArgumentException>(() => billing.Void(invoice.Id, new("Late correction"), default));
+        Assert.NotEqual("DA_HUY", (await s.Db.HoaDonPhongs.SingleAsync(x => x.Id == invoice.Id)).TrangThai);
+    }
 }

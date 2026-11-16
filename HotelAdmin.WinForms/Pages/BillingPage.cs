@@ -61,8 +61,9 @@ public sealed class BillingPage : ModulePage
             .AddAction("In", r => PrintAsync(r!.Value), when: r => J.Str(r, "status") != "NHAP")
             .AddAction("Gửi khách", r => SendInvoiceAsync(r!.Value), "BILLING_WRITE",
                 when: r => J.Bool(r, "has_account") && J.Str(r, "status") is not ("NHAP" or "DA_HUY"))
+            // Chỉ hủy được khi khách còn ở (để lập lại hóa đơn thay thế); đã trả phòng thì dùng phiếu hoàn.
             .AddAction("Hủy hóa đơn", r => VoidAsync(r!.Value, $"v1/invoices/{J.Long(r.Value, "id")}:void"), "BILLING_WRITE",
-                when: r => J.Str(r, "status") != "DA_HUY");
+                when: r => J.Str(r, "status") != "DA_HUY" && J.Str(r, "booking_status") != "DA_TRA");
         view.DefaultAction = r => ShowRoomInvoiceAsync(r!.Value);
         return view;
     }
@@ -361,7 +362,14 @@ public sealed class BillingPage : ModulePage
         var methods = await lookups.PaymentMethodsAsync();
         var dlg = new FormDialog("Xác nhận đã hoàn tiền", 500, $"{J.MoneyVnd(J.Dec(row, "amount"))} · {J.Str(row, "source")} · booking {J.Str(row, "booking_code")}", okText: "Xác nhận");
         dlg.TextField("reference", "Mã giao dịch hoàn / số phiếu chi", null, required: true, span: 2);
-        dlg.Combo("payment_method_id", "Phương thức thực tế", methods, null, allowEmpty: true, emptyText: $"Giữ nguyên ({J.Str(row, "method")})", span: 2);
+        // Cọc VietQR không hoàn ngược qua QR được: bắt buộc chọn phương thức thực tế, mặc định Chuyển khoản.
+        if (J.Str(row, "method").Contains("QR", StringComparison.OrdinalIgnoreCase))
+        {
+            var transfer = methods.FirstOrDefault(m => m.Text.Contains("Chuyển khoản", StringComparison.OrdinalIgnoreCase));
+            dlg.Combo("payment_method_id", "Phương thức thực tế", methods, transfer.Text is null ? methods.FirstOrDefault().Value : transfer.Value, required: true, span: 2);
+        }
+        else
+            dlg.Combo("payment_method_id", "Phương thức thực tế", methods, null, allowEmpty: true, emptyText: $"Giữ nguyên ({J.Str(row, "method")})", span: 2);
         dlg.OnSubmit = v => Api.PostJsonAsync($"v1/refunds/{J.Long(row, "id")}:confirm", v);
         return dlg.ShowFor(Owner);
     }

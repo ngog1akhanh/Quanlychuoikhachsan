@@ -196,6 +196,7 @@
                                 Query="State.Query"
                                 Booking="State.CurrentBooking"
                                 PromotionName="@State.PromotionName"
+                                BedPreference="@State.BedPreference"
                                 DiscountedTotal="@(State.PromotionId is null ? null : State.EstimatedTotal)"
                                 ShowRemove="@(!InPaymentStep)"
                                 OnRemove="OnRemoveRoom">
@@ -247,6 +248,12 @@
     private async Task CreateHoldAsync()
     {
         if (State.SelectedCount == 0) return;
+        var specialRequest = State.ComposeSpecialRequest();
+        if (specialRequest?.Length > 1000)
+        {
+            _error = "Yêu cầu đặc biệt quá dài (tối đa 1000 ký tự, đã gồm dòng loại giường). Vui lòng rút gọn.";
+            return;
+        }
         _busy = true;
         _error = null;
         try
@@ -257,7 +264,7 @@
                 State.Query.CheckOut.ToDateTime(new TimeOnly(12, 0)),
                 State.Query.Adults,
                 State.Query.Children,
-                string.IsNullOrWhiteSpace(State.Guest.SpecialRequest) ? null : State.Guest.SpecialRequest.Trim(),
+                specialRequest, // gồm "Loại giường mong muốn: ..." nếu khách đã chọn
                 State.Guest.FullName.Trim(), State.Guest.PhoneNumber.Trim(), State.Guest.Email.Trim(),
                 State.PromotionId);
 

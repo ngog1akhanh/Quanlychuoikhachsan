@@ -27,6 +27,9 @@ public sealed class OperationalReportsController(HotelDbContext db) : Controller
         Input.Range(from, to); var start = HotelTime.StartOfDayUtc(from); var end = HotelTime.StartOfDayUtc(to.AddDays(1));
         return Ok(await (from usage in db.Set<SuDungDichVu>() join service in db.Set<DichVu>() on usage.DichVuId equals service.Id
             where usage.TrangThai == "HOAN_THANH" && usage.ThoiGianPhucVu >= start && usage.ThoiGianPhucVu < end
+                // Bỏ lượt dùng có hóa đơn dịch vụ đã hủy – khớp với báo cáo doanh thu (cũng loại hóa đơn DA_HUY).
+                && !db.Set<ChiTietHoaDonDichVu>().Any(l => l.SuDungDichVuId == usage.Id
+                    && db.Set<HoaDonDichVu>().Any(i => i.Id == l.HoaDonDichVuId && i.TrangThai == "DA_HUY"))
             group usage by new { service.Id, service.TenDichVu } into g orderby g.Sum(x => x.ThanhTien) descending
             select new { g.Key.Id, Name = g.Key.TenDichVu, Requests = g.Count(), Quantity = g.Sum(x => x.SoLuong), Amount = g.Sum(x => x.ThanhTien) }).ToListAsync(ct));
     }
@@ -48,8 +51,39 @@ public sealed class OperationalReportsController(HotelDbContext db) : Controller
             .Select(g => new { ItemId = g.Key, Opening = g.Sum(x => x.ThoiGian < start ? x.SoLuongThayDoi : 0),
                 Received = g.Sum(x => x.ThoiGian >= start && x.SoLuongThayDoi > 0 ? x.SoLuongThayDoi : 0),
                 Issued = g.Sum(x => x.ThoiGian >= start && x.SoLuongThayDoi < 0 ? -x.SoLuongThayDoi : 0), Closing = g.Sum(x => x.SoLuongThayDoi) }).ToListAsync(ct);
+        // Giá trị nhập = Σ thành tiền (SL × đơn giá) của phiếu nhập ĐÃ XÁC NHẬN trong kỳ, theo ngày xác nhận (= ngày hàng vào kho).
+        // Chưa trừ chiết khấu / cộng thuế vì hai khoản này ghi chung cho cả phiếu (xem /reports/purchases).
+        var purchaseValues = await (from line in db.Set<ChiTietPhieuNhap>()
+                                    join order in db.PhieuNhaps on line.PhieuNhapId equals order.Id
+                                    where order.KhoId == warehouseId && order.TrangThai == "DA_XAC_NHAN" && order.XacNhanLuc >= start && order.XacNhanLuc < end
+                                    group line by line.DanhMucHangHoaId into g
+                                    select new { ItemId = g.Key, Value = g.Sum(x => x.ThanhTien) }).ToListAsync(ct);
         var items = await db.DanhMucHangHoas.AsNoTracking().ToListAsync(ct);
-        return Ok(items.Select(x => { var t = totals.SingleOrDefault(t => t.ItemId == x.Id); return new { ItemId = x.Id, x.MaHang, x.TenHang, Opening = t?.Opening ?? 0, Received = t?.Received ?? 0, Issued = t?.Issued ?? 0, Closing = t?.Closing ?? 0, Minimum = x.MucTonToiThieu, BelowMinimum = (t?.Closing ?? 0) < x.MucTonToiThieu }; }));
+        return Ok(items.Select(x => { var t = totals.SingleOrDefault(t => t.ItemId == x.Id); return new { ItemId = x.Id, x.MaHang, x.TenHang, Opening = t?.Opening ?? 0, Received = t?.Received ?? 0, Issued = t?.Issued ?? 0, Closing = t?.Closing ?? 0, Minimum = x.MucTonToiThieu, BelowMinimum = (t?.Closing ?? 0) < x.MucTonToiThieu,
+            PurchaseValue = purchaseValues.Where(v => v.ItemId == x.Id).Sum(v => v.Value) }; }));
+    }
+
+    /// <summary>
+    /// Chi phí nhập hàng trong kỳ theo nhà cung cấp: chỉ phiếu nhập đã xác nhận (theo ngày xác nhận); bỏ phiếu nháp / đã hủy.
+    /// Đây là tiền khách sạn CHI RA – tách riêng, không gộp vào doanh thu và không liên quan ca thu ngân.
+    /// </summary>
+    [HttpGet("purchases")]
+    public async Task<IActionResult> Purchases(DateOnly from, DateOnly to, long? warehouseId, CancellationToken ct)
+    {
+        Input.Range(from, to); var start = HotelTime.StartOfDayUtc(from); var end = HotelTime.StartOfDayUtc(to.AddDays(1));
+        var rows = await db.PhieuNhaps.AsNoTracking()
+            .Where(x => x.TrangThai == "DA_XAC_NHAN" && x.XacNhanLuc >= start && x.XacNhanLuc < end && (!warehouseId.HasValue || x.KhoId == warehouseId))
+            .GroupBy(x => x.NhaCungCapId)
+            .Select(g => new { SupplierId = g.Key, Orders = g.Count(), Goods = g.Sum(x => x.TongTienHang), Discount = g.Sum(x => x.ChietKhau), Tax = g.Sum(x => x.TienThue), Total = g.Sum(x => x.TongThanhToan) })
+            .ToListAsync(ct);
+        var ids = rows.Select(x => x.SupplierId).ToList();
+        var names = await db.NhaCungCaps.AsNoTracking().Where(x => ids.Contains(x.Id)).ToDictionaryAsync(x => x.Id, x => x.TenNhaCungCap, ct);
+        return Ok(new
+        {
+            From = from, To = to, WarehouseId = warehouseId,
+            Orders = rows.Sum(x => x.Orders), Goods = rows.Sum(x => x.Goods), Discount = rows.Sum(x => x.Discount), Tax = rows.Sum(x => x.Tax), Total = rows.Sum(x => x.Total),
+            Suppliers = rows.OrderByDescending(x => x.Total).Select(x => new { x.SupplierId, SupplierName = names.GetValueOrDefault(x.SupplierId, $"NCC #{x.SupplierId}"), x.Orders, x.Goods, x.Discount, x.Tax, x.Total })
+        });
     }
     [HttpGet("revenue-breakdown")]
     public async Task<IActionResult> Revenue(DateOnly from, DateOnly to, CancellationToken ct)

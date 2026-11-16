@@ -223,21 +223,24 @@ public sealed class StaffPage : ModulePage
             PageSize = 50,
             Loader = q => Api.GetJsonAsync(ApiClient.Url("v1/audit-logs", ("page", q.Page), ("pageSize", q.PageSize), ("search", q.Search)))
         };
-        view.AddSearch("Tên bảng (vd: dat_phong)…", 200)
+        view.AddSearch("Đối tượng (vd: hóa đơn, đặt phòng)…", 220)
             .Columns(
                 Col.Time("Thời gian", "created_at", 80),
-                Col.Text("Tài khoản", "tai_khoan_id", 50),
-                Col.Text("Hành động", "hanh_dong", 60),
-                Col.Text("Đối tượng", "doi_tuong", 90),
-                Col.Text("ID", "doi_tuong_id", 45),
-                Col.Custom("Dữ liệu mới", e => Clip(J.Str(e, "du_lieu_moi")), 260));
+                Col.Text("Người thực hiện", "account_name", 90),
+                Col.Text("Hành động", "action_label", 60),
+                Col.Text("Đối tượng", "object_label", 90),
+                Col.Custom("Mã / ID", e => RecordText(e), 70),
+                Col.Text("Nội dung thay đổi", "summary", 280));
         view.DefaultAction = r =>
         {
             if (r is not { } e) return Task.FromResult(false);
-            using var dlg = new DetailDialog("Chi tiết nhật ký", $"{J.Str(e, "hanh_dong")} {J.Str(e, "doi_tuong")} #{J.Str(e, "doi_tuong_id")}", 760, 520);
-            dlg.Info(("Thời gian", J.TimeText(J.Time(e, "created_at"))), ("Tài khoản", J.Str(e, "tai_khoan_id")),
-                ("Địa chỉ IP", J.StrOrNull(e, "dia_chi_ip")), ("Trình duyệt / app", J.StrOrNull(e, "user_agent")),
-                ("Dữ liệu cũ", Clip(J.Str(e, "du_lieu_cu"), 600)), ("Dữ liệu mới", Clip(J.Str(e, "du_lieu_moi"), 600)));
+            using var dlg = new DetailDialog("Chi tiết nhật ký", $"{J.Str(e, "action_label")} · {J.Str(e, "object_label")} {RecordText(e)}", 760, 560);
+            dlg.Info(("Thời gian", J.TimeText(J.Time(e, "created_at"))), ("Người thực hiện", J.Str(e, "account_name")),
+                ("Đối tượng", $"{J.Str(e, "object_label")} ({J.Str(e, "doi_tuong")})"), ("Mã / ID", RecordText(e)),
+                ("Địa chỉ IP", J.StrOrNull(e, "dia_chi_ip")), ("Trình duyệt / app", J.StrOrNull(e, "user_agent")));
+            // Bảng từng trường: giá trị cũ → mới (đã dịch tên trường, trạng thái, ngày giờ theo giờ khách sạn).
+            dlg.Table("Các trường thay đổi", J.Items(e, "changes"), 300,
+                Col.Text("Trường", "label", 120), Col.Text("Giá trị cũ", "old", 180), Col.Text("Giá trị mới", "new", 180));
             dlg.ShowDialog(Owner);
             return Task.FromResult(false);
         };
@@ -245,4 +248,12 @@ public sealed class StaffPage : ModulePage
     }
 
     private static string Clip(string s, int max = 120) => s.Length > max ? s[..max] + "…" : s;
+
+    /// <summary>Mã nghiệp vụ (DP-0012, HD…) nếu có, kèm ID bản ghi.</summary>
+    private static string RecordText(System.Text.Json.JsonElement e)
+    {
+        var code = J.StrOrNull(e, "record_code");
+        var id = J.StrOrNull(e, "doi_tuong_id");
+        return code is not null && id is not null ? $"{Clip(code, 18)} (#{id})" : code ?? (id is null ? "—" : $"#{id}");
+    }
 }

@@ -35,9 +35,11 @@ public sealed partial class ApiClient
         => SendJsonAsync<PricePreview>(HttpMethod.Get, $"v1/rooms/{roomId}/price?checkInDate={D(checkIn)}&checkOutDate={D(checkOut)}", null, ct);
 
     // ---------------- Đặt phòng (FrontDeskController) ----------------
-    public Task<FrontDeskBookingPage> SearchBookingsAsync(string? q, string? status, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken ct = default, bool arrivalDescending = true)
+    /// <param name="sortBy">"booked" = theo thời điểm đặt (mặc định, mới đặt lên trước); "arrival" = theo ngày nhận phòng.</param>
+    public Task<FrontDeskBookingPage> SearchBookingsAsync(string? q, string? status, DateOnly? from, DateOnly? to, int page, int pageSize, CancellationToken ct = default,
+        string sortBy = "booked", bool descending = true)
     {
-        var url = $"v1/front-desk/bookings?page={page}&pageSize={pageSize}&arrivalDescending={arrivalDescending.ToString().ToLowerInvariant()}";
+        var url = $"v1/front-desk/bookings?page={page}&pageSize={pageSize}&sortBy={sortBy}&descending={descending.ToString().ToLowerInvariant()}";
         if (!string.IsNullOrWhiteSpace(q)) url += $"&q={Uri.EscapeDataString(q.Trim())}";
         if (!string.IsNullOrWhiteSpace(status)) url += $"&status={Uri.EscapeDataString(status)}";
         if (from is { } f) url += $"&from={D(f)}";

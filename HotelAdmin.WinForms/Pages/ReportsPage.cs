@@ -219,8 +219,13 @@ public sealed partial class ReportsPage : ModulePage
         var below = r.Kpi("Dưới mức tối thiểu", Glyph.Warning);
         var received = r.Kpi("Tổng nhập trong kỳ", Glyph.ArrowIn);
         var issued = r.Kpi("Tổng xuất trong kỳ", Glyph.ArrowOut);
-        var grid = r.Grid("Nhập – xuất – tồn theo mặt hàng", 0, 0, ("Mã hàng", 70, false), ("Tên hàng", 150, false), ("Tồn đầu", 60, true),
-            ("Nhập", 60, true), ("Xuất", 60, true), ("Tồn cuối", 60, true), ("Tối thiểu", 60, true), ("Cảnh báo", 70, false));
+        // Tiền khách sạn chi ra để nhập hàng – tách khỏi doanh thu, không đi qua ca thu ngân.
+        var cost = r.Kpi("Chi phí nhập hàng", Glyph.Card);
+        var grid = r.Grid("Nhập – xuất – tồn theo mặt hàng · giá trị nhập = SL × đơn giá (chưa trừ chiết khấu, chưa cộng thuế)", 0, 0,
+            ("Mã hàng", 70, false), ("Tên hàng", 150, false), ("Tồn đầu", 60, true),
+            ("Nhập", 60, true), ("Xuất", 60, true), ("Tồn cuối", 60, true), ("Tối thiểu", 60, true), ("Giá trị nhập", 80, true), ("Cảnh báo", 70, false));
+        var suppliers = r.Grid("Chi phí nhập theo nhà cung cấp (phiếu đã xác nhận trong kỳ)", 0, 1,
+            ("Nhà cung cấp", 160, false), ("Số phiếu", 50, true), ("Tiền hàng", 80, true), ("Chiết khấu", 70, true), ("Thuế", 70, true), ("Tổng thanh toán", 90, true));
         r.Loader = async () =>
         {
             if (!ValidRange()) return;
@@ -231,15 +236,29 @@ public sealed partial class ReportsPage : ModulePage
             }
             if (warehouse.SelectedItem is not Choice<long> w) { Ui.Info(FindForm(), "Chưa có kho nào."); return; }
             var rows = J.Items(await Report("inventory", ("warehouseId", w.Value)));
+            var purchases = await Report("purchases", ("warehouseId", w.Value));
             items.Value = rows.Count.ToString();
             below.Value = rows.Count(e => J.Bool(e, "below_minimum")).ToString();
             received.Value = J.Qty(rows.Sum(e => J.Dec(e, "received")));
             issued.Value = J.Qty(rows.Sum(e => J.Dec(e, "issued")));
-            ReportView.Fill(grid, rows.OrderByDescending(e => J.Bool(e, "below_minimum")).Select(e => new object?[]
+            cost.Value = J.MoneyVnd(J.Dec(purchases, "total"));
+            ReportView.Fill(grid, rows.OrderByDescending(e => J.Bool(e, "below_minimum")).ThenByDescending(e => J.Dec(e, "purchase_value")).Select(e => new object?[]
             {
                 J.Str(e, "ma_hang"), J.Str(e, "ten_hang"), J.Qty(J.Dec(e, "opening")), J.Qty(J.Dec(e, "received")), J.Qty(J.Dec(e, "issued")),
-                J.Qty(J.Dec(e, "closing")), J.Qty(J.Dec(e, "minimum")), J.Bool(e, "below_minimum") ? "⚠ Cần nhập" : ""
+                J.Qty(J.Dec(e, "closing")), J.Qty(J.Dec(e, "minimum")),
+                J.Dec(e, "purchase_value") > 0 ? J.Money(J.Dec(e, "purchase_value")) : "",
+                J.Bool(e, "below_minimum") ? "⚠ Cần nhập" : ""
             }));
+            var supplierRows = J.Items(purchases, "suppliers").Select(e => new object?[]
+            {
+                J.Str(e, "supplier_name"), J.Qty(J.Dec(e, "orders")), J.Money(J.Dec(e, "goods")), J.Money(J.Dec(e, "discount")),
+                J.Money(J.Dec(e, "tax")), J.Money(J.Dec(e, "total"))
+            }).ToList();
+            // Dòng tổng = ô "Chi phí nhập hàng" → hai số kiểm tra chéo được.
+            if (supplierRows.Count > 0)
+                supplierRows.Add(["TỔNG CỘNG", J.Qty(J.Dec(purchases, "orders")), J.Money(J.Dec(purchases, "goods")), J.Money(J.Dec(purchases, "discount")),
+                    J.Money(J.Dec(purchases, "tax")), J.Money(J.Dec(purchases, "total"))]);
+            ReportView.Fill(suppliers, supplierRows);
         };
         return r;
     }

@@ -158,35 +158,30 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
         foreach (var d in booking.ChiTietDatPhongs) d.TrangThai = "DA_HUY";
         item.TrangThai = "DA_DUYET"; item.SoTienHoanDuyet = request.ApprovedRefund; item.NhanVienXuLyId = await actor.EmployeeIdAsync(ct); item.ThoiGianXuLy = DateTime.UtcNow; item.GhiChuXuLy = request.Note;
         var remainingRefund = request.ApprovedRefund;
-        var refundedAt = DateTime.UtcNow;
-        var totalRefunded = 0m;
+        var createdAt = DateTime.UtcNow;
+        var totalRefund = 0m;
         foreach (var deposit in await dbContext.PhieuCocs.Where(x => x.DatPhongId == booking.Id && x.TrangThai == "DA_THANH_TOAN").OrderBy(x => x.Id).ToListAsync(ct))
         {
             var reserved = await dbContext.Set<PhieuHoanTien>().Where(x => x.PhieuCocId == deposit.Id && x.TrangThai != "DA_HUY").SumAsync(x => (decimal?)x.SoTien, ct) ?? 0;
             var amount = Math.Min(remainingRefund, Math.Max(0, deposit.SoTien - reserved));
             if (amount > 0)
             {
-                // Hủy phòng được duyệt = tiền cọc đã được hoàn cho khách: lưu luôn phiếu ở trạng thái THANH_CONG (hiển thị "Đã hoàn cọc")
-                // để có lịch sử hoàn tiền, đối soát ca thu ngân đúng và không còn phiếu CHO_XU_LY chiếm hết số tiền có thể hoàn.
-                dbContext.Add(new PhieuHoanTien { MaPhieuHoan = $"HT{Guid.NewGuid():N}", PhieuCocId = deposit.Id, YeuCauHuyId = item.Id, NhanVienId = item.NhanVienXuLyId, PhuongThucId = deposit.PhuongThucId, SoTien = amount, LyDo = request.Note ?? "Hoàn cọc do hủy đặt phòng", TrangThai = "THANH_CONG", ThoiGianHoan = refundedAt });
-                totalRefunded += amount;
-                var succeeded = await dbContext.Set<PhieuHoanTien>().Where(x => x.PhieuCocId == deposit.Id && x.TrangThai == "THANH_CONG").SumAsync(x => (decimal?)x.SoTien, ct) ?? 0;
-                if (succeeded + amount >= deposit.SoTien)
-                {
-                    var order = await dbContext.Set<DepositPaymentOrder>().SingleOrDefaultAsync(p => p.BookingId == deposit.DatPhongId && p.TransactionId == deposit.MaGiaoDich, ct);
-                    if (order is not null) order.Status = "REFUNDED";
-                }
+                // Duyệt hủy = đồng ý hoàn, CHƯA chi tiền: phiếu ở trạng thái CHO_XU_LY.
+                // Thu ngân chi tiền xong bấm "Xác nhận đã hoàn" (POST /v1/refunds/{id}:confirm) → THANH_CONG,
+                // khi đó mới trừ vào ca thu ngân của người chi, đánh dấu đơn QR REFUNDED và báo khách "đã hoàn".
+                dbContext.Add(new PhieuHoanTien { MaPhieuHoan = $"HT{Guid.NewGuid():N}", PhieuCocId = deposit.Id, YeuCauHuyId = item.Id, NhanVienId = item.NhanVienXuLyId, PhuongThucId = deposit.PhuongThucId, SoTien = amount, LyDo = request.Note ?? "Hoàn cọc do hủy đặt phòng", TrangThai = "CHO_XU_LY", ThoiGianHoan = createdAt });
+                totalRefund += amount;
             }
             remainingRefund -= amount;
         }
-        if (remainingRefund > 0) throw new InvalidArgumentException("Refund exceeds available deposits.");
+        if (remainingRefund > 0) throw new InvalidArgumentException("Số tiền hoàn vượt quá tiền cọc còn có thể hoàn.");
         dbContext.KhoaLichPhongs.RemoveRange(await dbContext.KhoaLichPhongs.Where(x => x.ChiTietDatPhongId != 0 && dbContext.ChiTietDatPhongs.Where(d => d.DatPhongId == item.DatPhongId).Select(d => d.Id).Contains(x.ChiTietDatPhongId)).ToListAsync(ct));
         await dbContext.SaveChangesAsync(ct);
         await notifications.BookingAsync(booking, actor.AccountId, "CHO_DUYET_HUY", request.Note ?? "Đã duyệt hủy đặt phòng.", ct);
-        if (totalRefunded > 0)
+        if (totalRefund > 0)
         {
             var customerAccountId = await dbContext.KhachHangs.Where(k => k.Id == booking.KhachHangId).Select(k => k.TaiKhoanId).SingleOrDefaultAsync(ct);
-            if (customerAccountId.HasValue) await notifications.SendAsync("PAYMENT", "Đã hoàn tiền cọc", $"Booking {booking.MaDatPhong}: đã hoàn cọc {totalRefunded:N0} VND.", [customerAccountId.Value], actor.AccountId, booking, ct);
+            if (customerAccountId.HasValue) await notifications.SendAsync("PAYMENT", "Đã duyệt hoàn tiền cọc", $"Booking {booking.MaDatPhong}: khách sạn sẽ hoàn {totalRefund:N0} VND tiền cọc. Bạn sẽ nhận thông báo khi tiền được chuyển.", [customerAccountId.Value], actor.AccountId, booking, ct);
         }
         await dbContext.SaveChangesAsync(ct); await tx.CommitAsync(ct); return new(item.Id, $"cancellation-requests/{item.Id}", item.DatPhongId, item.TrangThai, item.SoTienHoanDuKien, item.SoTienHoanDuyet);
     }
@@ -227,10 +222,14 @@ public sealed partial class BookingService(HotelDbContext dbContext, CurrentActo
         else { dbContext.RemoveRange(invoice.ChiTiet); invoice.ChiTiet.Clear(); }
         invoice.TienPhong = roomAmount; invoice.TienPhuThu = surcharge; invoice.TienBoiThuong = compensation; invoice.TienThue = Input.Round(taxable * vatRate); invoice.TongTien = taxable + invoice.TienThue; invoice.TrangThai = "NHAP";
         Input.Money(invoice.TongTien, "invoice_total");
-        foreach (var night in nights) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { ChiTietDatPhongId = night.ChiTietDatPhongId, LoaiDong = "TIEN_PHONG", NoiDung = $"Room night {night.NgayLuuTru:yyyy-MM-dd}", NgayApDung = night.NgayLuuTru, SoLuong = 1, DonGia = night.GiaSauDieuChinh, ThanhTien = night.GiaSauDieuChinh });
-        foreach (var condition in conditions) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { TinhTrangPhongId = condition.Id, LoaiDong = "BOI_THUONG", NoiDung = $"Room condition {condition.Id}", SoLuong = 1, DonGia = condition.ChiPhiThucTe, ThanhTien = condition.ChiPhiThucTe });
-        if (surcharge > 0) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { LoaiDong = "PHU_THU", NoiDung = "Early arrival / late departure", SoLuong = 1, DonGia = surcharge, ThanhTien = surcharge });
-        if (invoice.TienThue > 0) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { LoaiDong = "THUE", NoiDung = "VAT", SoLuong = 1, DonGia = invoice.TienThue, ThanhTien = invoice.TienThue });
+        // Nội dung dòng hóa đơn bằng tiếng Việt (khớp dữ liệu mẫu và bản in); kèm số phòng khi booking có nhiều phòng.
+        var roomNumbers = await dbContext.ChiTietDatPhongs.Where(d => detailIds.Contains(d.Id)).Select(d => new { d.Id, d.Phong.SoPhong }).ToDictionaryAsync(d => d.Id, d => d.SoPhong, ct);
+        string NightText(GiaDemDatPhong n) => $"Tiền phòng đêm {n.NgayLuuTru:dd/MM/yyyy}" + (roomNumbers.Count > 1 && roomNumbers.TryGetValue(n.ChiTietDatPhongId, out var no) ? $" – phòng {no}" : "");
+        string ConditionText(TinhTrangPhong c) { var text = $"Bồi thường: {(string.IsNullOrWhiteSpace(c.MoTa) ? c.LoaiTinhTrang : c.MoTa.Trim())}"; return text.Length > 255 ? text[..252] + "..." : text; }
+        foreach (var night in nights) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { ChiTietDatPhongId = night.ChiTietDatPhongId, LoaiDong = "TIEN_PHONG", NoiDung = NightText(night), NgayApDung = night.NgayLuuTru, SoLuong = 1, DonGia = night.GiaSauDieuChinh, ThanhTien = night.GiaSauDieuChinh });
+        foreach (var condition in conditions) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { TinhTrangPhongId = condition.Id, LoaiDong = "BOI_THUONG", NoiDung = ConditionText(condition), SoLuong = 1, DonGia = condition.ChiPhiThucTe, ThanhTien = condition.ChiPhiThucTe });
+        if (surcharge > 0) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { LoaiDong = "PHU_THU", NoiDung = "Phụ thu nhận phòng sớm / trả phòng trễ", SoLuong = 1, DonGia = surcharge, ThanhTien = surcharge });
+        if (invoice.TienThue > 0) invoice.ChiTiet.Add(new ChiTietHoaDonPhong { LoaiDong = "THUE", NoiDung = $"VAT {vatRate * 100:0.##}%", SoLuong = 1, DonGia = invoice.TienThue, ThanhTien = invoice.TienThue });
         await dbContext.SaveChangesAsync(ct);
         if (replaced is not null) replaced.HoaDonThayTheId = invoice.Id;
         dbContext.ApDungCocHoaDons.RemoveRange(await dbContext.ApDungCocHoaDons.Where(x => x.HoaDonPhongId == invoice.Id).ToListAsync(ct)); await dbContext.SaveChangesAsync(ct);

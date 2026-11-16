@@ -5,6 +5,10 @@
     <div class="summary-row"><span>Trả phòng</span><b>@Fmt.Date(Query.CheckOut) · @HotelInfo.CheckOutTime</b></div>
     <div class="summary-row"><span>Số đêm</span><b>@Query.Nights</b></div>
     <div class="summary-row"><span>Khách</span><b>@Query.Adults người lớn@(Query.Children > 0 ? $", {Query.Children} trẻ em" : "")</b></div>
+    @if (!string.IsNullOrEmpty(BedPreference))
+    {
+        <div class="summary-row"><span>Loại giường</span><b>@BedPreference</b></div>
+    }
 
     <div class="mt-1">
         @foreach (var r in Rooms)
@@ -70,6 +74,9 @@
     /// <summary>Tên ưu đãi đang chọn và tổng tiền sau ưu đãi (chưa giữ phòng). Có booking thì dùng giá chốt của booking.</summary>
     [Parameter] public string? PromotionName { get; set; }
     [Parameter] public decimal? DiscountedTotal { get; set; }
+
+    /// <summary>Loại giường khách chọn ở trang chi tiết phòng (Giường đơn / Giường đôi); null = không hiển thị.</summary>
+    [Parameter] public string? BedPreference { get; set; }
 
     private decimal BaseTotal => Rooms.Sum(r => r.UnitPrice) * Query.Nights;
     private decimal Total => Booking?.TotalRoomAmount ?? DiscountedTotal ?? BaseTotal;

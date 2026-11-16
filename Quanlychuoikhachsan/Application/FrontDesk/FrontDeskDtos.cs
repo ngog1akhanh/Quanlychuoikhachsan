@@ -14,7 +14,11 @@ public sealed record FrontDeskBookingQuery(
     DateOnly? To = null,
     int Page = 1,
     int PageSize = 50,
-    bool ArrivalDescending = true);
+    // Tham số cũ: client gửi arrivalDescending thì vẫn sắp theo ngày nhận phòng như trước.
+    bool? ArrivalDescending = null,
+    // "booked" (mặc định) = theo thời điểm khách đặt; "arrival" = theo ngày nhận phòng.
+    string? SortBy = null,
+    bool Descending = true);
 
 public sealed record FrontDeskBookingItem(
     long Id,

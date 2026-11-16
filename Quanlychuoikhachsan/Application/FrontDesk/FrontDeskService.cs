@@ -40,9 +40,16 @@ public sealed partial class FrontDeskService(HotelDbContext db, BookingService b
         }
 
         var total = await q.CountAsync(ct);
-        var ordered = query.ArrivalDescending
-            ? q.OrderByDescending(x => x.DuKienNhan).ThenByDescending(x => x.Id)
-            : q.OrderBy(x => x.DuKienNhan).ThenBy(x => x.Id);
+        // Mặc định: booking mới đặt hiện trước (theo ngay_dat). Id tăng theo thứ tự tạo nên dùng làm khóa phụ ổn định.
+        var byArrival = query.ArrivalDescending.HasValue || string.Equals(query.SortBy, "arrival", StringComparison.OrdinalIgnoreCase);
+        var descending = query.ArrivalDescending ?? query.Descending;
+        var ordered = (byArrival, descending) switch
+        {
+            (true, true) => q.OrderByDescending(x => x.DuKienNhan).ThenByDescending(x => x.Id),
+            (true, false) => q.OrderBy(x => x.DuKienNhan).ThenBy(x => x.Id),
+            (false, true) => q.OrderByDescending(x => x.NgayDat).ThenByDescending(x => x.Id),
+            (false, false) => q.OrderBy(x => x.NgayDat).ThenBy(x => x.Id)
+        };
         var paged = ordered.Skip((page - 1) * size).Take(size);
         var items = await ProjectAsync(paged, ct);
         return new FrontDeskBookingPage(items, total, page, size);

@@ -100,7 +100,7 @@ Hủy booking: POST `/bookings/{id}:cancel` với `reason`; quản lý POST `/ca
 
 Thu nhầm hóa đơn: POST `/invoices/{id}:void` hoặc `/service-invoices/{id}:void` với `reason`, rồi POST `/refunds`. Mỗi phiếu hoàn chỉ có một trong `deposit_id`, `room_payment_id`, `service_payment_id`, kèm `payment_method_id,amount,reason`. Cọc dư sau checkout có thể tạo phiếu hoàn tương tự. Tổng phiếu hoàn chờ xử lý và thành công không vượt nguồn còn khả dụng.
 
-Sau khi đã thực sự hoàn tiền, nhân viên có `REFUND_CONFIRM` gọi `/refunds/{id}:confirm` với `reference` và tùy chọn `payment_method_id`. Với cọc QR, có thể chọn phương thức chuyển khoản thủ công để ghi nhận hoàn ngân hàng. API này không ra lệnh chuyển tiền. Chi tiết booking và hộp thư phản ánh kết quả hoàn cọc.
+Duyệt hủy chỉ tạo phiếu hoàn `CHO_XU_LY`. Sau khi đã thực sự hoàn tiền, nhân viên có `REFUND_CONFIRM` gọi `/refunds/{id}:confirm` với `reference` và tùy chọn `payment_method_id`. Với cọc QR, bắt buộc chọn phương thức thực tế (ví dụ chuyển khoản) để ghi nhận hoàn ngân hàng. API này không ra lệnh chuyển tiền. Chi tiết booking và hộp thư phản ánh kết quả hoàn cọc.
 
 GET `/invoices/{id}/print` trả HTML in được; POST `:send` gửi đường dẫn hóa đơn vào hộp thư khách có tài khoản.
 

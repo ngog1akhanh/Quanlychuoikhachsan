@@ -1943,6 +1943,44 @@ body {
     font-weight: 700;
 }
 
+/* Chọn loại giường (Giường đơn / Giường đôi) – cùng kiểu viền tròn với ô số phòng */
+.bed-row {
+    align-items: center;
+    margin-top: 6px;
+}
+
+.bed-toggle {
+    display: inline-flex;
+    border: 1px solid #d9d4c7;
+    border-radius: 999px;
+    overflow: hidden;
+}
+
+.bed-choice {
+    border: 0;
+    background: transparent;
+    padding: 6px 12px;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    color: #244f3d;
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+    .bed-choice + .bed-choice {
+        border-left: 1px solid #d9d4c7;
+    }
+
+    .bed-choice:hover:not(.active) {
+        background: #f1efe8;
+    }
+
+    .bed-choice.active {
+        background: #244f3d;
+        color: #fff;
+    }
+
 .promo-list {
     border-top: 1px dashed #d9d4c7;
     padding-top: 10px;

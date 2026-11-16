@@ -61,7 +61,7 @@ public sealed class ServicesController(HotelDbContext db, CurrentActor actor, Se
         await actor.BookingAsync(invoice.DatPhongId, "BILLING_READ", ct);
         var lines = await db.Set<ChiTietHoaDonDichVu>().Where(x => x.HoaDonDichVuId == id).ToListAsync(ct);
         var payments = await db.Set<ThanhToanDichVu>().Where(x => x.HoaDonDichVuId == id).ToListAsync(ct);
-        return Ok(new { Invoice = invoice, Lines = lines, Payments = payments, Due = invoice.TongTien - payments.Where(x => x.TrangThai == "THANH_CONG").Sum(x => x.SoTien) });
+        return Ok(new { Invoice = invoice, Lines = lines, Payments = payments, Due = invoice.TrangThai == "DA_HUY" ? 0 : Math.Max(0, invoice.TongTien - payments.Where(x => x.TrangThai == "THANH_CONG").Sum(x => x.SoTien)) });
     }
     [HttpPost("service-invoices/{id:long}:pay"), RequirePermission("BILLING_PAYMENT_WRITE")]
     public async Task<IActionResult> Pay(long id, ServicePaymentRequest r, CancellationToken ct) => Ok(await service.PayAsync(id, r, ct));

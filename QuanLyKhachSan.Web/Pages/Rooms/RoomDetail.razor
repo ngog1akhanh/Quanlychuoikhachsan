@@ -112,6 +112,28 @@
                     </div>
                     <p class="muted small mb-0 text-right">Còn trống @MaxQty phòng loại này</p>
 
+                    @if (string.IsNullOrWhiteSpace(r.BedDescription))
+                    {
+                        <div class="summary-row bed-row">
+                            <span>Loại giường</span>
+                            <div class="bed-toggle" role="radiogroup" aria-label="Loại giường">
+                                @foreach (var option in BedOptions)
+                                {
+                                    var value = option;
+                                    <button type="button" role="radio" aria-checked="@(_bed == value ? "true" : "false")"
+                                            class="bed-choice @(_bed == value ? "active" : "")" @onclick="() => _bed = value">
+                                        @value
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                        <p class="muted small mb-0 text-right">Xếp theo yêu cầu, tùy tình trạng phòng</p>
+                    }
+                    else
+                    {
+                        <div class="summary-row"><span>Loại giường</span><b>@r.BedDescription</b></div>
+                    }
+
                     @if (HasPromo)
                     {
                         <div class="summary-row"><span class="muted">Giá gốc</span><s class="muted">@Fmt.Money(BaseTotal)</s></div>
@@ -200,6 +222,10 @@
     private int MaxQty => Math.Max(1, Group.Count);
     private List<PublicRoom> ChosenRooms => Group.Take(_qty).ToList();
 
+    // Loại giường mong muốn – chỉ hỏi khi phòng chưa có loại giường cố định
+    private static readonly string[] BedOptions = [BookingState.SingleBed, BookingState.DoubleBed];
+    private string _bed = BookingState.DoubleBed;
+
     // Ưu đãi
     private bool _showPromos;
     private bool _quoting;
@@ -237,6 +263,7 @@
             if (_room is not null)
             {
                 _qty = Math.Clamp(Group.Count(x => State.IsSelected(x.Id)), 1, MaxQty);
+                _bed = State.BedPreference ?? BookingState.DoubleBed;
                 _promos = null;
                 _showPromos = false;
                 if (State.PromotionId is { } promoId) await QuoteChosenAsync(promoId, State.PromotionName ?? "");
@@ -308,6 +335,7 @@
     {
         if (_room is null) return;
         State.SelectGroup(_room.GroupKey, ChosenRooms);
+        State.SetBedPreference(string.IsNullOrWhiteSpace(_room.BedDescription) ? _bed : null);
         Nav.NavigateTo("checkout");
     }
 

@@ -35,6 +35,7 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
                 x.b.MaDatPhong,
                 x.b.KhachHang.HoTen,
                 x.b.KhachHang.TaiKhoanId,
+                BookingStatus = x.b.TrangThai,
                 x.i.NgayLap,
                 x.i.TienPhong,
                 x.i.TienPhuThu,
@@ -55,6 +56,7 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
             BookingCode = x.MaDatPhong,
             CustomerName = x.HoTen,
             HasAccount = x.TaiKhoanId.HasValue,
+            x.BookingStatus,
             Rooms = string.Join(", ", x.Rooms),
             IssuedAt = U(x.NgayLap),
             RoomAmount = x.TienPhong,
@@ -64,7 +66,8 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
             Total = x.TongTien,
             DepositApplied = x.Deposit,
             Paid = x.Paid,
-            Due = Math.Max(0, x.TongTien - x.Deposit - x.Paid),
+            // Hóa đơn đã hủy không còn nợ: khoản đã thu xử lý bằng phiếu hoàn, phần còn lại không thu nữa.
+            Due = x.TrangThai == "DA_HUY" ? 0 : Math.Max(0, x.TongTien - x.Deposit - x.Paid),
             Status = x.TrangThai,
             VoidReason = x.LyDoHuy
         }, ct));
@@ -106,7 +109,7 @@ public sealed class AppViewsController(HotelDbContext db, CurrentActor actor) : 
             IssuedAt = U(x.NgayLap),
             Total = x.TongTien,
             Paid = x.Paid,
-            Due = Math.Max(0, x.TongTien - x.Paid),
+            Due = x.TrangThai == "DA_HUY" ? 0 : Math.Max(0, x.TongTien - x.Paid),
             Status = x.TrangThai
         }, ct));
     }

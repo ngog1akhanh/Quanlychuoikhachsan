@@ -22,14 +22,21 @@ public sealed class BookingListTests
         Assert.Equal($"DP-{later.Id:D4}", later.BookingCode);
         Assert.Equal($"DP-{earlier.Id:D4}", (await store.Db.DatPhongs.SingleAsync(x => x.Id == earlier.Id)).MaDatPhong);
         var front = new FrontDeskService(store.Db, store.Bookings, store.Actor);
+        // Mặc định: booking đặt sau cùng hiện trước ("earlier" được tạo sau "later" dù ngày nhận sớm hơn).
         var first = await front.SearchAsync(new(Page: 1, PageSize: 1), default);
         var second = await front.SearchAsync(new(Page: 2, PageSize: 1), default);
-        Assert.Equal(later.Id, Assert.Single(first.Items).Id);
-        Assert.Equal(earlier.Id, Assert.Single(second.Items).Id);
-        var ascFirst = await front.SearchAsync(new(Page: 1, PageSize: 1, ArrivalDescending: false), default);
-        var ascSecond = await front.SearchAsync(new(Page: 2, PageSize: 1, ArrivalDescending: false), default);
+        Assert.Equal(earlier.Id, Assert.Single(first.Items).Id);
+        Assert.Equal(later.Id, Assert.Single(second.Items).Id);
+        // Sắp theo ngày nhận phòng (giảm dần / tăng dần)
+        var arrivalFirst = await front.SearchAsync(new(Page: 1, PageSize: 1, SortBy: "arrival"), default);
+        Assert.Equal(later.Id, Assert.Single(arrivalFirst.Items).Id);
+        var ascFirst = await front.SearchAsync(new(Page: 1, PageSize: 1, SortBy: "arrival", Descending: false), default);
+        var ascSecond = await front.SearchAsync(new(Page: 2, PageSize: 1, SortBy: "arrival", Descending: false), default);
         Assert.Equal(earlier.Id, Assert.Single(ascFirst.Items).Id);
         Assert.Equal(later.Id, Assert.Single(ascSecond.Items).Id);
+        // Client cũ gửi arrivalDescending vẫn được sắp theo ngày nhận
+        var legacy = await front.SearchAsync(new(Page: 1, PageSize: 1, ArrivalDescending: true), default);
+        Assert.Equal(later.Id, Assert.Single(legacy.Items).Id);
         var found = await front.SearchAsync(new(Q: earlier.BookingCode), default);
         Assert.Equal(earlier.Id, Assert.Single(found.Items).Id);
     }

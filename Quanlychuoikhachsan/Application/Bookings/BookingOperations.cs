@@ -15,7 +15,7 @@ public sealed partial class BookingService
     {
         var deposit = await dbContext.ApDungCocHoaDons.Where(x => x.HoaDonPhongId == invoice.Id).SumAsync(x => (decimal?)x.SoTienApDung, ct) ?? 0;
         var paid = await dbContext.ThanhToanHoaDonPhongs.Where(x => x.HoaDonPhongId == invoice.Id && x.TrangThai == "THANH_CONG").SumAsync(x => (decimal?)x.SoTien, ct) ?? 0;
-        return new(invoice.Id, $"invoices/{invoice.Id}", invoice.DatPhongId, invoice.TienPhong, invoice.TienPhuThu, invoice.TienBoiThuong, invoice.TienThue, invoice.TongTien, deposit, paid, Math.Max(0, invoice.TongTien - deposit - paid), invoice.TrangThai);
+        return new(invoice.Id, $"invoices/{invoice.Id}", invoice.DatPhongId, invoice.TienPhong, invoice.TienPhuThu, invoice.TienBoiThuong, invoice.TienThue, invoice.TongTien, deposit, paid, invoice.TrangThai == "DA_HUY" ? 0 : Math.Max(0, invoice.TongTien - deposit - paid), invoice.TrangThai);
     }
     public async Task<decimal> RequiredDepositAsync(DatPhong booking, CancellationToken ct)
     {

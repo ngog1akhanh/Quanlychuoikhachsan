@@ -120,9 +120,9 @@ dotnet run --project Quanlychuoikhachsan --launch-profile http
 | Cọc QR | Đủ tiền + phòng còn giữ → `BOOKED`. Thiếu tiền hoặc hết giữ phòng → phiếu hoàn chờ xử lý. |
 | Nhận phòng | Chỉ khi đã đến ngày lưu trú và mọi phòng ở trạng thái Sẵn sàng |
 | Trả phòng | 3 bước: **chốt hóa đơn → thu tiền → trả phòng**. API từ chối trả phòng khi hóa đơn chưa phát hành hoặc còn nợ |
-| Hóa đơn | Đã phát hành thì không sửa; sai thì hủy và lập lại. Gửi lại cùng `transaction_id` không bị thu hai lần |
+| Hóa đơn | Đã phát hành thì không sửa; sai thì hủy và lập lại **khi khách còn đang ở**. Booking đã trả phòng thì không hủy được hóa đơn (không lập lại được hóa đơn thay thế); thu thừa thì lập phiếu hoàn. Gửi lại cùng `transaction_id` không bị thu hai lần |
 | Thu cọc tại quầy | Có trường `reference` để chống thu trùng khi bấm lại |
-| Hủy booking | Khách gửi yêu cầu → quản lý duyệt. Duyệt tạo phiếu hoàn `CHO_XU_LY`; đây chỉ là ghi nhận, không tự chuyển tiền |
+| Hủy booking | Khách gửi yêu cầu → quản lý duyệt. Duyệt tạo phiếu hoàn `CHO_XU_LY` (đồng ý hoàn, chưa chi tiền). Thu ngân trả tiền cho khách rồi xác nhận `/refunds/{id}:confirm` → `THANH_CONG`; lúc này mới trừ vào ca thu ngân của người chi và báo khách đã hoàn. Cọc VietQR hoàn bằng phương thức thực tế (chuyển khoản/tiền mặt) |
 | Dịch vụ | Hoàn thành yêu cầu dịch vụ tạo hóa đơn dịch vụ riêng, không cộng vào hóa đơn phòng |
 | Kho | Tồn kho tính từ sổ kho; phiếu đã xác nhận không sửa; xuất kho theo lô hết hạn trước (FEFO) |
 

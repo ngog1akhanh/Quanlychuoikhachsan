@@ -26,6 +26,28 @@ public sealed class BookingState
     public BookingResponse? CurrentBooking { get; set; }
     public GuestInformation Guest { get; set; } = new();
 
+    // ---- Loại giường mong muốn (giường đơn / giường đôi) ----
+    // Chưa có cột riêng trong database: khi giữ phòng, lựa chọn này được ghép vào "Yêu cầu đặc biệt"
+    // để lễ tân thấy trên booking. null = phòng đã có loại giường cố định, không cần chọn.
+    public const string SingleBed = "Giường đơn";
+    public const string DoubleBed = "Giường đôi";
+    public string? BedPreference { get; private set; }
+
+    public void SetBedPreference(string? value)
+    {
+        BedPreference = value is SingleBed or DoubleBed ? value : null;
+        Changed?.Invoke();
+    }
+
+    /// <summary>Yêu cầu đặc biệt gửi lên API: dòng loại giường (nếu có) + ghi chú khách nhập.</summary>
+    public string? ComposeSpecialRequest()
+    {
+        var note = Guest.SpecialRequest?.Trim();
+        var bed = BedPreference is null ? null : $"Loại giường mong muốn: {BedPreference}.";
+        var text = string.Join("\n", new[] { bed, note }.Where(x => !string.IsNullOrWhiteSpace(x)));
+        return text.Length == 0 ? null : text;
+    }
+
     public event Action? Changed;
 
     public void SetResults(RoomSearchQuery query, IEnumerable<PublicRoom> rooms)
@@ -99,6 +121,7 @@ public sealed class BookingState
     {
         _selected.Clear();
         CurrentBooking = null;
+        BedPreference = null;
         ClearPromotionCore();
         Changed?.Invoke();
     }

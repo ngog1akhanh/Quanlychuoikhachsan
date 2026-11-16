@@ -32,7 +32,10 @@ public sealed class BookingsPage : PageBase
     private readonly BookingDetailView detail;
     private List<FrontDeskBookingItem> rows = [];
     private int page = 1;
-    private bool arrivalDescending = true;
+    // Thứ tự danh sách: mặc định theo thời điểm khách đặt, booking mới đặt hiện trước.
+    // Bấm tiêu đề "Mã / Đặt lúc" hoặc "Nhận" để đổi cột sắp xếp / đảo chiều.
+    private string sortBy = "booked";
+    private bool sortDescending = true;
     private bool changingOrder;
     private int total;
     private long? selectedId;
@@ -116,23 +119,30 @@ public sealed class BookingsPage : PageBase
         foreach (Control c in filters.Controls) c.Margin = new Padding(0, c is Label ? 12 : 4, 8, 0);
 
         grid.AutoGenerateColumns = false;
-        grid.AddText("code", "Mã", 120).MinimumWidth = 135;
+        grid.AddText("code", "Mã / Đặt lúc", 120).MinimumWidth = 135;
+        grid.Columns["code"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
+        grid.Columns["code"]!.SortMode = DataGridViewColumnSortMode.Programmatic;
+        grid.Columns["code"]!.HeaderCell.ToolTipText = "Sắp theo thời điểm khách đặt phòng (bấm để đảo chiều)";
         grid.AddText("guest", "Khách", 120).DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         grid.AddText("rooms", "Phòng", 60);
         grid.AddText("in", "Nhận", 105, "dd/MM/yyyy\nHH:mm").MinimumWidth = 105;
         grid.Columns["in"]!.DefaultCellStyle.WrapMode = DataGridViewTriState.True;
         grid.Columns["in"]!.SortMode = DataGridViewColumnSortMode.Programmatic;
-        grid.Columns["in"]!.HeaderCell.SortGlyphDirection = SortOrder.Descending;
-        grid.Columns["in"]!.HeaderCell.ToolTipText = "Bấm để đảo thứ tự ngày nhận phòng";
+        grid.Columns["in"]!.HeaderCell.ToolTipText = "Sắp theo ngày nhận phòng (bấm để đảo chiều)";
+        UpdateSortGlyphs();
         grid.ColumnHeaderMouseClick += async (_, e) =>
         {
-            if (e.ColumnIndex != grid.Columns["in"]!.Index || changingOrder) return;
+            var column = e.ColumnIndex == grid.Columns["code"]!.Index ? "booked"
+                : e.ColumnIndex == grid.Columns["in"]!.Index ? "arrival" : null;
+            if (column is null || changingOrder) return;
             changingOrder = true;
             try
             {
-                arrivalDescending = !arrivalDescending;
+                // Bấm lại cùng cột: đảo chiều. Chuyển sang cột khác: bắt đầu từ mới nhất / muộn nhất.
+                sortDescending = column != sortBy || !sortDescending;
+                sortBy = column;
                 page = 1;
-                grid.Columns["in"]!.HeaderCell.SortGlyphDirection = arrivalDescending ? SortOrder.Descending : SortOrder.Ascending;
+                UpdateSortGlyphs();
                 await ReloadSafeAsync();
             }
             finally { changingOrder = false; }
@@ -225,7 +235,7 @@ public sealed class BookingsPage : PageBase
         var st = status.SelectedItem is Choice<string?> c ? c.Value : null;
         DateOnly? fromD = fromDate.Checked ? DateOnly.FromDateTime(fromDate.Value) : null;
         DateOnly? toD = toDate.Checked ? DateOnly.FromDateTime(toDate.Value) : null;
-        var result = await Api.SearchBookingsAsync(search.Text, st, fromD, toD, page, PageSize, arrivalDescending: arrivalDescending);
+        var result = await Api.SearchBookingsAsync(search.Text, st, fromD, toD, page, PageSize, sortBy: sortBy, descending: sortDescending);
         rows = result.Items;
         total = result.Total;
         var pages = Math.Max(1, (int)Math.Ceiling(total / (double)PageSize));
@@ -235,7 +245,7 @@ public sealed class BookingsPage : PageBase
         grid.Rows.Clear();
         foreach (var b in rows)
         {
-            var added = grid.Rows.Add(b.BookingCode, $"{b.CustomerName}\n{b.CustomerPhone}".Trim(), b.Rooms, b.CheckIn,
+            var added = grid.Rows.Add($"{b.BookingCode}\n{b.BookedAt:dd/MM HH:mm}", $"{b.CustomerName}\n{b.CustomerPhone}".Trim(), b.Rooms, b.CheckIn,
                 b.CheckOut, b.Total, BookingDetailView.ChannelText(b.Channel), b.Status);
             // Lia chuột vào dòng: khung xem nhanh thông tin booking.
             var tip = PreviewText(b);
@@ -277,8 +287,16 @@ public sealed class BookingsPage : PageBase
         if (dlg.Changed) await ReloadSafeAsync();
     }
 
+    private void UpdateSortGlyphs()
+    {
+        var glyph = sortDescending ? SortOrder.Descending : SortOrder.Ascending;
+        grid.Columns["code"]!.HeaderCell.SortGlyphDirection = sortBy == "booked" ? glyph : SortOrder.None;
+        grid.Columns["in"]!.HeaderCell.SortGlyphDirection = sortBy == "arrival" ? glyph : SortOrder.None;
+    }
+
     private static string PreviewText(FrontDeskBookingItem b) => string.Join(Environment.NewLine,
         $"Mã: {b.BookingCode}",
+        $"Đặt lúc: {b.BookedAt:dd/MM/yyyy HH:mm}",
         $"Khách: {b.CustomerName}{(string.IsNullOrWhiteSpace(b.CustomerPhone) ? "" : " · " + b.CustomerPhone)}",
         $"Phòng: {b.Rooms}",
         $"Nhận: {b.CheckIn:dd/MM/yyyy HH:mm}  →  Trả: {b.CheckOut:dd/MM/yyyy HH:mm} ({b.Nights} đêm)",
@@ -330,7 +348,10 @@ public sealed class BookingsPage : PageBase
                 if (refund is null) return;
                 var note = Ui.Prompt(FindForm(), "Ghi chú duyệt", "Ghi chú (không bắt buộc):", null, required: false);
                 await Api.ApproveCancellationAsync(c.Id, refund.Value, note);
-                Ui.Info(FindForm(), $"Đã hủy booking {c.BookingCode}, hoàn {refund.Value:#,0} đ. Đã lưu phiếu hoàn (trạng thái Đã hoàn cọc) ở Hóa đơn → Phiếu hoàn tiền.");
+                Ui.Info(FindForm(), refund.Value > 0
+                    ? $"Đã hủy booking {c.BookingCode}. Đã lập phiếu hoàn {refund.Value:#,0} đ ở trạng thái Chờ xử lý.\n\n" +
+                      "Sau khi trả tiền cho khách, thu ngân vào Hóa đơn → Phiếu hoàn tiền, bấm \"Xác nhận đã hoàn\" và nhập mã giao dịch."
+                    : $"Đã hủy booking {c.BookingCode}. Không hoàn tiền cọc theo chính sách hủy.");
             }
             else
             {
